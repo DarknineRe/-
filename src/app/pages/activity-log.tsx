@@ -13,6 +13,22 @@ import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { Plus, Edit, Trash2, Clock, Package, Calendar } from "lucide-react";
 
+// convert object keys recursively to camelCase for display
+function camelCaseKey(key: string) {
+  return key.replace(/[_-][a-z]/g, (m) => m[1].toUpperCase());
+}
+
+function camelCaseKeys(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(camelCaseKeys);
+  if (obj && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [k, v]) => {
+      acc[camelCaseKey(k)] = camelCaseKeys(v);
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
 export function ActivityLog() {
   const { activityLogs, rollbackActivity } = useData();
 
@@ -191,9 +207,13 @@ export function ActivityLog() {
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-gray-400" />
-                        {format(new Date(log.timestamp), "d MMM yyyy, HH:mm", {
-                          locale: th,
-                        })}
+                        {(() => {
+                          const date = new Date(log.timestamp);
+                          if (isNaN(date.getTime())) {
+                            return "-";
+                          }
+                          return format(date, "d MMM yyyy, HH:mm", { locale: th });
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell>{getActionBadge(log.action)}</TableCell>
@@ -207,7 +227,8 @@ export function ActivityLog() {
                     <TableCell className="text-sm text-gray-600">
                       {(() => {
                         try {
-                          const obj = JSON.parse(log.details);
+                          let obj = JSON.parse(log.details);
+                          obj = camelCaseKeys(obj);
                           return <pre className="whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>;
                         } catch {
                           return log.details;

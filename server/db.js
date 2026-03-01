@@ -155,9 +155,14 @@ async function initializeDatabase() {
                 type VARCHAR(50) NOT NULL,
                 itemName VARCHAR(255) NOT NULL,
                 "user" VARCHAR(255) NOT NULL,
-                timestamp VARCHAR(255) NOT NULL,
+                timestamp TIMESTAMP NOT NULL,
                 details TEXT NOT NULL
             );
+        `);
+        // ensure existing column is timestamp and convert if necessary
+        await client.query(`
+            ALTER TABLE activity_logs
+            ALTER COLUMN timestamp TYPE TIMESTAMP USING timestamp::timestamp;
         `);
 
         console.log('Database tables created/verified successfully.');

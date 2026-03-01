@@ -391,12 +391,14 @@ app.post('/api/activity-logs', async (req, res) => {
     try {
         const { action, type, itemName, user, timestamp, details } = req.body;
         const id = Date.now().toString();
+        // ensure ISO string for timestamp
+        const ts = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
         const sql = `
             INSERT INTO activity_logs (id, action, type, itemName, "user", timestamp, details)
             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
         `;
 
-        const result = await pool.query(sql, [id, action, type, itemName, user, timestamp, details]);
+        const result = await pool.query(sql, [id, action, type, itemName, user, ts, details]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });

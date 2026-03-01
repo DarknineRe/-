@@ -77,6 +77,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<"owner" | "employee">("owner");
   const [isLoading, setIsLoading] = useState(true);
 
+  // utility to normalize backend rows to client models
+  const normalizeProduct = (row: any) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    quantity: row.quantity,
+    unit: row.unit,
+    minStock: row.minstock ?? row.minStock ?? 0,
+    harvestDate: row.harvestdate ? new Date(row.harvestdate) : row.harvestDate ? new Date(row.harvestDate) : undefined,
+    lastUpdated: row.lastupdated ? new Date(row.lastupdated) : row.lastUpdated ? new Date(row.lastUpdated) : new Date()
+  });
+
+  const normalizeSchedule = (row: any) => ({
+    id: row.id,
+    cropName: row.cropname ?? row.cropName,
+    category: row.category,
+    plantingDate: new Date(row.plantingdate || row.plantingDate),
+    harvestDate: new Date(row.harvestdate || row.harvestDate),
+    area: row.area,
+    estimatedYield: row.estimatedyield ?? row.estimatedYield,
+    status: row.status,
+    notes: row.notes
+  });
+
   // helper to load all data; used on mount and after rollbacks
   const loadData = async () => {
     try {
@@ -90,22 +114,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       if (productsRes.ok) {
         const data = await productsRes.json();
-        setProducts(data.map((p: any) => ({
-          ...p,
-          harvestDate: p.harvestDate ? new Date(p.harvestDate) : undefined,
-          lastUpdated: new Date(p.lastUpdated)
-        })));
-      }
-
+          setProducts(data.map((p: any) => normalizeProduct(p)));
       if (schedulesRes.ok) {
         const data = await schedulesRes.json();
-        setSchedules(data.map((s: any) => ({
-          ...s,
-          plantingDate: new Date(s.plantingDate),
-          harvestDate: new Date(s.harvestDate)
-        })));
-      }
-
+          setSchedules(data.map((s: any) => normalizeSchedule(s)));
       if (priceHistoryRes.ok) {
         setPriceHistory(await priceHistoryRes.json());
       }
@@ -188,11 +200,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       const newProduct = await res.json();
-      setProducts(prev => [...prev, {
-        ...newProduct,
-        harvestDate: newProduct.harvestDate ? new Date(newProduct.harvestDate) : undefined,
-        lastUpdated: new Date(newProduct.lastUpdated)
-      }]);
+      const normalized = normalizeProduct(newProduct);
+      setProducts(prev => [...prev, normalized]);
 
       toast.success("เพิ่มสินค้าสำเร็จ", { description: `เพิ่ม ${product.name} เข้าสู่ระบบแล้ว` });
 
@@ -204,8 +213,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         user: "admin",
         timestamp: new Date(),
         details: JSON.stringify({
-          itemId: newProduct.id,
-          new: newProduct
+          itemId: normalized.id,
+          new: normalized
         }),
       });
     } catch (error: any) {
@@ -229,11 +238,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error("Failed to update product");
 
       const data = await res.json();
-      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? {
-        ...data,
-        harvestDate: data.harvestDate ? new Date(data.harvestDate) : undefined,
-        lastUpdated: new Date(data.lastUpdated)
-      } : p));
+      const normalized = normalizeProduct(data);
+      setProducts(prev => prev.map(p => p.id === updatedProduct.id ? normalized : p));
 
       toast.success("อัพเดทสินค้าสำเร็จ", { description: `อัพเดท ${updatedProduct.name} แล้ว` });
 
@@ -246,7 +252,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         details: JSON.stringify({
           itemId: updatedProduct.id,
           previous: oldProduct,
-          new: data
+          new: normalized
         }),
       });
     } catch (error) {
@@ -296,11 +302,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error("Failed to add schedule");
 
       const newSchedule = await res.json();
-      setSchedules(prev => [...prev, {
-        ...newSchedule,
-        plantingDate: new Date(newSchedule.plantingDate),
-        harvestDate: new Date(newSchedule.harvestDate)
-      }]);
+      const normalized = normalizeSchedule(newSchedule);
+      setSchedules(prev => [...prev, normalized]);
 
       toast.success("เพิ่มตารางการปลูกสำเร็จ", { description: `เพิ่ม ${schedule.cropName} เข้าสู่ระบบแล้ว` });
 
@@ -311,8 +314,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         user: "admin",
         timestamp: new Date(),
         details: JSON.stringify({
-          itemId: newSchedule.id,
-          new: newSchedule
+          itemId: normalized.id,
+          new: normalized
         }),
       });
     } catch (error) {
@@ -333,11 +336,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!res.ok) throw new Error("Failed to update schedule");
 
       const data = await res.json();
-      setSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? {
-        ...data,
-        plantingDate: new Date(data.plantingDate),
-        harvestDate: new Date(data.harvestDate)
-      } : s));
+      const normalized = normalizeSchedule(data);
+      setSchedules(prev => prev.map(s => s.id === updatedSchedule.id ? normalized : s));
 
       toast.success("อัพเดทตารางการปลูกสำเร็จ", { description: `อัพเดท ${updatedSchedule.cropName} แล้ว` });
 
@@ -350,7 +350,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         details: JSON.stringify({
           itemId: updatedSchedule.id,
           previous: oldSchedule,
-          new: data
+          new: normalized
         }),
       });
     } catch (error) {
