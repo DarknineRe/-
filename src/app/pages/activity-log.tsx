@@ -13,20 +13,37 @@ import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { Plus, Edit, Trash2, Clock, Package, Calendar } from "lucide-react";
 
-// convert object keys recursively to camelCase for display
-function camelCaseKey(key: string) {
-  return key.replace(/[_-][a-z]/g, (m) => m[1].toUpperCase());
+// get Thai description for action
+function getActionThaiText(action: string): string {
+  switch (action) {
+    case "add":
+      return "เพิ่ม";
+    case "update":
+      return "แก้ไข";
+    case "delete":
+      return "ลบ";
+    default:
+      return "";
+  }
 }
 
-function camelCaseKeys(obj: any): any {
-  if (Array.isArray(obj)) return obj.map(camelCaseKeys);
-  if (obj && typeof obj === 'object') {
-    return Object.entries(obj).reduce((acc, [k, v]) => {
-      acc[camelCaseKey(k)] = camelCaseKeys(v);
-      return acc;
-    }, {} as any);
+// get Thai type text
+function getTypeThaiText(type: string): string {
+  switch (type) {
+    case "product":
+      return "สินค้า";
+    case "schedule":
+      return "แผนการปลูก";
+    default:
+      return "";
   }
-  return obj;
+}
+
+// combine action + type + item name into one description
+function getDescription(action: string, type: string, itemName: string): string {
+  const actionTh = getActionThaiText(action);
+  const typeTh = getTypeThaiText(type);
+  return `${actionTh}${typeTh} ${itemName}`;
 }
 
 export function ActivityLog() {
@@ -112,9 +129,7 @@ export function ActivityLog() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">ประวัติการเปลี่ยนแปลง</h2>
         <p className="text-gray-600 mt-1">
-          บันทึกการเพิ่ม แก้ไข และลบข้อมูลในระบบ
-          <br />
-          คุณสามารถใช้ปุ่ม "ย้อนกลับ" เพื่อคืนค่าการกระทำล่าสุด (ถ้ามี)
+          บันทึกการเพิ่ม แก้ไข และลบข้อมูล
         </p>
       </div>
 
@@ -195,69 +210,53 @@ export function ActivityLog() {
                   <TableHead>วันที่/เวลา</TableHead>
                   <TableHead>การกระทำ</TableHead>
                   <TableHead>ประเภท</TableHead>
-                  <TableHead>ชื่อรายการ</TableHead>
-                  <TableHead>รายละเอียด</TableHead>
+                  <TableHead>คำอธิบาย</TableHead>
                   <TableHead>ผู้ใช้</TableHead>
                   <TableHead className="text-center">ย้อนกลับ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="text-sm">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-gray-400" />
+                {sortedLogs.map((log) => {
+                  const date = new Date(log.timestamp);
+                  const isValidDate = !isNaN(date.getTime());
+                  const dateStr = isValidDate ? format(date, "d MMM yyyy, HH:mm", { locale: th }) : "-";
+                  const description = getDescription(log.action, log.type, log.itemName);
+
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-sm font-medium">{dateStr}</TableCell>
+                      <TableCell>{getActionBadge(log.action)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getTypeIcon(log.type)}
+                          {getTypeBadge(log.type)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-700">{description}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{log.user}</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
                         {(() => {
-                          const date = new Date(log.timestamp);
-                          if (isNaN(date.getTime())) {
-                            return "-";
-                          }
-                          return format(date, "d MMM yyyy, HH:mm", { locale: th });
+                          let enabled = false;
+                          try {
+                            const d = JSON.parse(log.details);
+                            enabled = !!d?.itemId;
+                          } catch {}
+                          return (
+                            <button
+                              className={`text-sm ${enabled ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-not-allowed'}`}
+                              onClick={() => enabled && rollback(log)}
+                              disabled={!enabled}
+                            >
+                              ย้อนกลับ
+                            </button>
+                          );
                         })()}
-                      </div>
-                    </TableCell>
-                    <TableCell>{getActionBadge(log.action)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(log.type)}
-                        {getTypeBadge(log.type)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{log.itemName}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {(() => {
-                        try {
-                          let obj = JSON.parse(log.details);
-                          obj = camelCaseKeys(obj);
-                          return <pre className="whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>;
-                        } catch {
-                          return log.details;
-                        }
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{log.user}</Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        let enabled = false;
-                        try {
-                          const d = JSON.parse(log.details);
-                          enabled = !!d?.itemId;
-                        } catch {}
-                        return (
-                          <button
-                            className={`text-sm ${enabled ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-not-allowed'}`}
-                            onClick={() => enabled && rollback(log)}
-                            disabled={!enabled}
-                          >
-                            ย้อนกลับ
-                          </button>
-                        );
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

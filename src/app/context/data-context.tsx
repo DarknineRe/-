@@ -144,10 +144,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const addActivityLog = async (log: Omit<ActivityLog, "id">) => {
     try {
+      // ensure timestamp is ISO string
+      const timestamp = log.timestamp instanceof Date ? log.timestamp.toISOString() : new Date().toISOString();
       const res = await fetch(`${API_BASE}/api/activity-logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log)
+        body: JSON.stringify({ ...log, timestamp })
       });
       if (res.ok) {
         const newLog = await res.json();
