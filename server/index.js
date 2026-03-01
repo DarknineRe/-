@@ -249,7 +249,11 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
     try {
-        const { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        let { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        // enforce non-null minStock; default to 0 if missing or null
+        if (minStock === undefined || minStock === null) {
+            minStock = 0;
+        }
         const id = Date.now().toString();
         const insertSql = `
             INSERT INTO products (id, name, category, quantity, unit, minStock, harvestDate, lastUpdated)
@@ -268,7 +272,10 @@ app.post('/api/products', async (req, res) => {
 
 app.put('/api/products/:id', async (req, res) => {
     try {
-        const { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        let { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        if (minStock === undefined || minStock === null) {
+            minStock = 0;
+        }
         const sql = `
             UPDATE products
             SET name=$1, category=$2, quantity=$3, unit=$4, minStock=$5, harvestDate=$6, lastUpdated=$7

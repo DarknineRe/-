@@ -102,10 +102,14 @@ async function initializeDatabase() {
                 category VARCHAR(100) NOT NULL,
                 quantity INT NOT NULL,
                 unit VARCHAR(50) NOT NULL,
-                minStock INT NOT NULL,
+                minStock INT NOT NULL DEFAULT 0,
                 harvestDate VARCHAR(255),
                 lastUpdated VARCHAR(255) NOT NULL
             );
+        `);
+        // ensure default exists even if table was created earlier without it
+        await client.query(`
+            ALTER TABLE products ALTER COLUMN minStock SET DEFAULT 0;
         `);
 
         await client.query(`
