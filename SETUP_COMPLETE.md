@@ -184,6 +184,12 @@ User logged in successfully!
 - ✅ Verify Client ID matches in environment variables
 - ✅ Check that PostgreSQL database is running
 
+### Frontend deployment notes
+- When hosting the frontend separately from the backend, set an environment variable
+  `VITE_API_BASE` to the backend URL (e.g. `https://farmvalley.onrender.com`).
+  All API calls will be prefixed with this value. In development it may remain empty
+  since the Vite dev server proxies `/api` to `http://localhost:3001`.
+
 ### User Not Getting Created
 - ✅ Ensure `users` table exists in the PostgreSQL database
 - ✅ Check database connection in `.env` (DB_HOST, DB_PORT, etc.)

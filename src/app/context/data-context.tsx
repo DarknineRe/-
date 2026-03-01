@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
+import { API_BASE } from "../../api";
 
 export interface Product {
   id: string;
@@ -80,10 +81,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoading(true);
         const [productsRes, schedulesRes, priceHistoryRes, activityLogsRes] = await Promise.all([
-          fetch('/api/products'),
-          fetch('/api/schedules'),
-          fetch('/api/price-history'),
-          fetch('/api/activity-logs')
+          fetch(`${API_BASE}/api/products`),
+          fetch(`${API_BASE}/api/schedules`),
+          fetch(`${API_BASE}/api/price-history`),
+          fetch(`${API_BASE}/api/activity-logs`)
         ]);
 
         if (productsRes.ok) {
@@ -129,7 +130,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const addActivityLog = async (log: Omit<ActivityLog, "id">) => {
     try {
-      const res = await fetch('/api/activity-logs', {
+      const res = await fetch(`${API_BASE}/api/activity-logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log)
@@ -155,7 +156,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         lastUpdated: new Date().toISOString()
       };
       
-      const res = await fetch('/api/products', {
+      const res = await fetch(`${API_BASE}/api/products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -194,7 +195,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateProduct = async (updatedProduct: Product) => {
     try {
       const payload = { ...updatedProduct, lastUpdated: new Date().toISOString() };
-      const res = await fetch(`/api/products/${updatedProduct.id}`, {
+      const res = await fetch(`${API_BASE}/api/products/${updatedProduct.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -228,7 +229,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const deleteProduct = async (id: string) => {
     try {
       const product = products.find(p => p.id === id);
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/products/${id}`, { method: 'DELETE' });
 
       if (!res.ok) throw new Error("Failed to delete product");
 
@@ -254,7 +255,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const addSchedule = async (schedule: Omit<PlantingSchedule, "id">) => {
     try {
-      const res = await fetch('/api/schedules', {
+      const res = await fetch(`${API_BASE}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(schedule),
@@ -287,7 +288,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateSchedule = async (updatedSchedule: PlantingSchedule) => {
     try {
-      const res = await fetch(`/api/schedules/${updatedSchedule.id}`, {
+      const res = await fetch(`${API_BASE}/api/schedules/${updatedSchedule.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedSchedule),
@@ -321,7 +322,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const deleteSchedule = async (id: string) => {
     try {
       const schedule = schedules.find(s => s.id === id);
-      const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE}/api/schedules/${id}`, { method: 'DELETE' });
 
       if (!res.ok) throw new Error("Failed to delete schedule");
 
