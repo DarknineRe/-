@@ -25,8 +25,8 @@ app.post('/api/auth/login', async (req, res) => {
         }
         
         // Check if user exists in database
-        const [users] = await pool.query(
-            'SELECT * FROM users WHERE email = ? AND password = ?',
+        const { rows: users } = await pool.query(
+            'SELECT * FROM users WHERE email = $1 AND password = $2',
             [email, password]
         );
         
@@ -62,8 +62,8 @@ app.post('/api/auth/register', async (req, res) => {
         }
         
         // Check if user already exists
-        const [existingUsers] = await pool.query(
-            'SELECT * FROM users WHERE email = ?',
+        const { rows: existingUsers } = await pool.query(
+            'SELECT * FROM users WHERE email = $1',
             [email]
         );
         
@@ -71,17 +71,18 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(409).json({ error: 'Email already exists' });
         }
         
-        // Insert new user
-        const [result] = await pool.execute(
-            'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+        // Insert new user and return generated id
+        const insertResult = await pool.query(
+            'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
             [name, email, password, 'farmer']
         );
+        const newUserId = insertResult.rows[0].id;
         
         res.status(201).json({
             success: true,
             message: 'User registered successfully',
             user: {
-                id: result.insertId.toString(),
+                id: newUserId.toString(),
                 name,
                 email,
                 role: 'farmer'
@@ -100,8 +101,8 @@ app.get('/api/auth/check-user/:email', async (req, res) => {
     try {
         const { email } = req.params;
         
-        const [users] = await pool.query(
-            'SELECT id, name, email FROM users WHERE email = ?',
+        const { rows: users } = await pool.query(
+            'SELECT id, name, email FROM users WHERE email = $1',
             [email]
         );
         
@@ -169,8 +170,8 @@ app.post('/api/auth/google', async (req, res) => {
         }
 
         // Check if user exists
-        const [existingUsers] = await pool.query(
-            'SELECT * FROM users WHERE email = ?',
+        const { rows: existingUsers } = await pool.query(
+            'SELECT * FROM users WHERE email = $1',
             [email]
         );
 
@@ -179,16 +180,11 @@ app.post('/api/auth/google', async (req, res) => {
             user = existingUsers[0];
         } else {
             // Create new user from Google auth
-            const [result] = await pool.execute(
-                'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+            const insertResult = await pool.query(
+                'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
                 [name || email.split('@')[0], email, 'google_oauth', 'farmer']
             );
-            user = {
-                id: result.insertId,
-                name: name || email.split('@')[0],
-                email,
-                role: 'farmer'
-            };
+            user = insertResult.rows[0];
         }
 
         res.json({
@@ -211,7 +207,7 @@ app.post('/api/auth/google', async (req, res) => {
 
 app.get('/api/products', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM products');
+        const { rows } = await pool.query('SELECT * FROM products');
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -222,12 +218,16 @@ app.post('/api/products', async (req, res) => {
     try {
         const { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
         const id = Date.now().toString();
-        const sql = 'INSERT INTO products (id, name, category, quantity, unit, minStock, harvestDate, lastUpdated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+        const insertSql = `
+            INSERT INTO products (id, name, category, quantity, unit, minStock, harvestDate, lastUpdated)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *
+        `;
 
-        await pool.execute(sql, [id, name, category, quantity, unit, minStock, harvestDate, lastUpdated]);
-        
-        const [row] = await pool.query('SELECT * FROM products WHERE id = ?', [id]);
-        res.status(201).json(row[0]);
+        const insertResult = await pool.query(insertSql, [
+            id, name, category, quantity, unit, minStock, harvestDate, lastUpdated
+        ]);
+        res.status(201).json(insertResult.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -236,12 +236,17 @@ app.post('/api/products', async (req, res) => {
 app.put('/api/products/:id', async (req, res) => {
     try {
         const { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
-        const sql = 'UPDATE products SET name = ?, category = ?, quantity = ?, unit = ?, minStock = ?, harvestDate = ?, lastUpdated = ? WHERE id = ?';
+        const sql = `
+            UPDATE products
+            SET name=$1, category=$2, quantity=$3, unit=$4, minStock=$5, harvestDate=$6, lastUpdated=$7
+            WHERE id=$8
+            RETURNING *
+        `;
 
-        await pool.execute(sql, [name, category, quantity, unit, minStock, harvestDate, lastUpdated, req.params.id]);
-        
-        const [row] = await pool.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
-        res.json(row[0]);
+        const result = await pool.query(sql, [
+            name, category, quantity, unit, minStock, harvestDate, lastUpdated, req.params.id
+        ]);
+        res.json(result.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -249,8 +254,8 @@ app.put('/api/products/:id', async (req, res) => {
 
 app.delete('/api/products/:id', async (req, res) => {
     try {
-        const result = await pool.execute('DELETE FROM products WHERE id = ?', [req.params.id]);
-        res.json({ message: 'Deleted', changes: result[0].affectedRows });
+        const result = await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
+        res.json({ message: 'Deleted', changes: result.rowCount });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -260,7 +265,7 @@ app.delete('/api/products/:id', async (req, res) => {
 
 app.get('/api/schedules', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM schedules');
+        const { rows } = await pool.query('SELECT * FROM schedules');
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -271,12 +276,15 @@ app.post('/api/schedules', async (req, res) => {
     try {
         const { cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes } = req.body;
         const id = Date.now().toString();
-        const sql = 'INSERT INTO schedules (id, cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        const sql = `
+            INSERT INTO schedules (id, cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+        `;
 
-        await pool.execute(sql, [id, cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes]);
-        
-        const [row] = await pool.query('SELECT * FROM schedules WHERE id = ?', [id]);
-        res.status(201).json(row[0]);
+        const result = await pool.query(sql, [
+            id, cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes
+        ]);
+        res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -285,12 +293,19 @@ app.post('/api/schedules', async (req, res) => {
 app.put('/api/schedules/:id', async (req, res) => {
     try {
         const { cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes } = req.body;
-        const sql = 'UPDATE schedules SET cropName = ?, category = ?, plantingDate = ?, harvestDate = ?, area = ?, estimatedYield = ?, status = ?, notes = ? WHERE id = ?';
+        const sql = `
+            UPDATE schedules
+            SET cropName=$1, category=$2, plantingDate=$3, harvestDate=$4,
+                area=$5, estimatedYield=$6, status=$7, notes=$8
+            WHERE id=$9
+            RETURNING *
+        `;
 
-        await pool.execute(sql, [cropName, category, plantingDate, harvestDate, area, estimatedYield, status, notes, req.params.id]);
-        
-        const [row] = await pool.query('SELECT * FROM schedules WHERE id = ?', [req.params.id]);
-        res.json(row[0]);
+        const result = await pool.query(sql, [
+            cropName, category, plantingDate, harvestDate, area,
+            estimatedYield, status, notes, req.params.id
+        ]);
+        res.json(result.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -298,8 +313,8 @@ app.put('/api/schedules/:id', async (req, res) => {
 
 app.delete('/api/schedules/:id', async (req, res) => {
     try {
-        const result = await pool.execute('DELETE FROM schedules WHERE id = ?', [req.params.id]);
-        res.json({ message: 'Deleted', changes: result[0].affectedRows });
+        const result = await pool.query('DELETE FROM schedules WHERE id = $1', [req.params.id]);
+        res.json({ message: 'Deleted', changes: result.rowCount });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -309,7 +324,7 @@ app.delete('/api/schedules/:id', async (req, res) => {
 
 app.get('/api/price-history', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM price_history ORDER BY id ASC');
+        const { rows } = await pool.query('SELECT * FROM price_history ORDER BY id ASC');
         // Parse cropData JSON back to object
         const formattedRows = rows.map(r => ({
             date: r.date,
@@ -325,7 +340,7 @@ app.get('/api/price-history', async (req, res) => {
 
 app.get('/api/activity-logs', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50');
+        const { rows } = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50');
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -336,10 +351,13 @@ app.post('/api/activity-logs', async (req, res) => {
     try {
         const { action, type, itemName, user, timestamp, details } = req.body;
         const id = Date.now().toString();
-        const sql = 'INSERT INTO activity_logs (id, action, type, itemName, user, timestamp, details) VALUES (?, ?, ?, ?, ?, ?, ?)';
+        const sql = `
+            INSERT INTO activity_logs (id, action, type, itemName, user, timestamp, details)
+            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+        `;
 
-        await pool.execute(sql, [id, action, type, itemName, user, timestamp, details]);
-        res.status(201).json({ id, action, type, itemName, user, timestamp, details });
+        const result = await pool.query(sql, [id, action, type, itemName, user, timestamp, details]);
+        res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
@@ -400,9 +418,16 @@ app.post('/api/market-prices/store', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         
-        const sql = 'INSERT INTO market_prices (date, product_id, product_name, min_price, max_price, avg_price) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE min_price = ?, max_price = ?, avg_price = ?';
+        const sql = `
+            INSERT INTO market_prices (date, product_id, product_name, min_price, max_price, avg_price)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (date, product_id)
+            DO UPDATE SET min_price = EXCLUDED.min_price,
+                          max_price = EXCLUDED.max_price,
+                          avg_price = EXCLUDED.avg_price
+        `;
         
-        await pool.execute(sql, [date, productId, productName || '', minPrice, maxPrice, avgPrice, minPrice, maxPrice, avgPrice]);
+        await pool.query(sql, [date, productId, productName || '', minPrice, maxPrice, avgPrice]);
         
         res.status(201).json({ 
             message: 'Market price stored successfully',
@@ -422,17 +447,17 @@ app.get('/api/market-prices/history/:product_id', async (req, res) => {
         const { product_id } = req.params;
         const { from_date, to_date } = req.query;
         
-        let sql = 'SELECT * FROM market_prices WHERE product_id = ?';
+        let sql = 'SELECT * FROM market_prices WHERE product_id = $1';
         const params = [product_id];
         
         if (from_date && to_date) {
-            sql += ' AND date BETWEEN ? AND ?';
+            sql += ' AND date BETWEEN $2 AND $3';
             params.push(from_date, to_date);
         }
         
         sql += ' ORDER BY date DESC LIMIT 100';
         
-        const [rows] = await pool.query(sql, params);
+        const { rows } = await pool.query(sql, params);
         
         if (rows.length === 0) {
             return res.status(404).json({ message: 'No price history found' });
@@ -457,10 +482,11 @@ app.post('/api/market-prices/compare', async (req, res) => {
             return res.status(400).json({ error: 'Missing date or product_ids' });
         }
         
-        const placeholders = product_ids.map(() => '?').join(',');
-        const sql = `SELECT * FROM market_prices WHERE date = ? AND product_id IN (${placeholders})`;
+        // build numbered placeholders starting at $2 since $1 is date
+        const placeholders = product_ids.map((_, i) => `$${i + 2}`).join(',');
+        const sql = `SELECT * FROM market_prices WHERE date = $1 AND product_id IN (${placeholders})`;
         
-        const [rows] = await pool.query(sql, [date, ...product_ids]);
+        const { rows } = await pool.query(sql, [date, ...product_ids]);
         
         res.json({
             date,

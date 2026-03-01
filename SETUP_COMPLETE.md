@@ -182,11 +182,11 @@ User logged in successfully!
 ### Token Verification Fails
 - ✅ Check backend logs for detailed error
 - ✅ Verify Client ID matches in environment variables
-- ✅ Check that MySQL database is running
+- ✅ Check that PostgreSQL database is running
 
 ### User Not Getting Created
-- ✅ Ensure `users` table exists in MySQL
-- ✅ Check database connection in `.env`
+- ✅ Ensure `users` table exists in the PostgreSQL database
+- ✅ Check database connection in `.env` (DB_HOST, DB_PORT, etc.)
 - ✅ Look at backend console for errors
 
 ---

@@ -37,14 +37,14 @@ async function fetchAndStoreMarketPrices(date = null) {
                 // Store in database
                 const sql = `
                     INSERT INTO market_prices (date, product_id, product_name, min_price, max_price, avg_price) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE 
-                    min_price = VALUES(min_price),
-                    max_price = VALUES(max_price),
-                    avg_price = VALUES(avg_price)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (date, product_id) DO UPDATE SET
+                        min_price = EXCLUDED.min_price,
+                        max_price = EXCLUDED.max_price,
+                        avg_price = EXCLUDED.avg_price
                 `;
                 
-                await pool.execute(sql, [
+                await pool.query(sql, [
                     targetDate,
                     priceData.productId,
                     priceData.productName,

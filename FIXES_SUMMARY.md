@@ -4,7 +4,7 @@
 **Status**: FIXED ✅
 
 ### Changes Made:
-- Added `users` table to MySQL database
+- Added `users` table to PostgreSQL database
 - Created backend authentication endpoints:
   - `POST /api/auth/login` - Verify credentials against database
   - `POST /api/auth/register` - Create new user
@@ -77,7 +77,7 @@ Role: admin
 
 ## Database Setup Instructions
 
-### 1. Create MySQL Database:
+### 1. Create PostgreSQL Database:
 ```sql
 CREATE DATABASE agricultural_db;
 ```
@@ -85,8 +85,9 @@ CREATE DATABASE agricultural_db;
 ### 2. Create `.env` file in `/server` directory:
 ```
 DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_postgres_password
 DB_NAME=agricultural_db
 ```
 
