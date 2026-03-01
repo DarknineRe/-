@@ -396,6 +396,86 @@ app.post('/api/activity-logs', async (req, res) => {
     }
 });
 
+// rollback endpoint for undoing logged actions
+app.post('/api/activity-logs/:id/rollback', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rows } = await pool.query('SELECT * FROM activity_logs WHERE id = $1', [id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Log not found' });
+        }
+        const log = rows[0];
+        let details;
+        try {
+            details = JSON.parse(log.details);
+        } catch (e) {
+            details = null;
+        }
+
+        // require an itemId at minimum for rollback
+        const itemId = details?.itemId;
+        if (!itemId) {
+            return res.status(400).json({ error: 'Insufficient rollback information' });
+        }
+
+        // helper functions for each type
+        const rollbackProduct = async () => {
+            if (log.action === 'add') {
+                await pool.query('DELETE FROM products WHERE id = $1', [itemId]);
+            } else if (log.action === 'delete') {
+                const prev = details.previous;
+                if (!prev) throw new Error('No previous product data');
+                await pool.query(
+                    `INSERT INTO products (id,name,category,quantity,unit,minStock,harvestDate,lastUpdated)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                    [prev.id, prev.name, prev.category, prev.quantity, prev.unit, prev.minStock, prev.harvestDate, prev.lastUpdated]
+                );
+            } else if (log.action === 'update') {
+                const prev = details.previous;
+                if (!prev) throw new Error('No previous product data');
+                await pool.query(
+                    `UPDATE products SET name=$1, category=$2, quantity=$3, unit=$4, minStock=$5, harvestDate=$6, lastUpdated=$7 WHERE id=$8`,
+                    [prev.name, prev.category, prev.quantity, prev.unit, prev.minStock, prev.harvestDate, prev.lastUpdated, prev.id]
+                );
+            }
+        };
+
+        const rollbackSchedule = async () => {
+            if (log.action === 'add') {
+                await pool.query('DELETE FROM schedules WHERE id = $1', [itemId]);
+            } else if (log.action === 'delete') {
+                const prev = details.previous;
+                if (!prev) throw new Error('No previous schedule data');
+                await pool.query(
+                    `INSERT INTO schedules (id,cropName,category,plantingDate,harvestDate,area,estimatedYield,status,notes)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+                    [prev.id, prev.cropName, prev.category, prev.plantingDate, prev.harvestDate, prev.area, prev.estimatedYield, prev.status, prev.notes]
+                );
+            } else if (log.action === 'update') {
+                const prev = details.previous;
+                if (!prev) throw new Error('No previous schedule data');
+                await pool.query(
+                    `UPDATE schedules SET cropName=$1, category=$2, plantingDate=$3, harvestDate=$4, area=$5, estimatedYield=$6, status=$7, notes=$8 WHERE id=$9`,
+                    [prev.cropName, prev.category, prev.plantingDate, prev.harvestDate, prev.area, prev.estimatedYield, prev.status, prev.notes, prev.id]
+                );
+            }
+        };
+
+        if (log.type === 'product') {
+            await rollbackProduct();
+        } else if (log.type === 'schedule') {
+            await rollbackSchedule();
+        } else {
+            return res.status(400).json({ error: 'Cannot rollback this type' });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Rollback error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Market Price API (from MOC Thailand) ---
 
 /**

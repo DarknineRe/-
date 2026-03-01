@@ -14,7 +14,13 @@ import { th } from "date-fns/locale";
 import { Plus, Edit, Trash2, Clock, Package, Calendar } from "lucide-react";
 
 export function ActivityLog() {
-  const { activityLogs } = useData();
+  const { activityLogs, rollbackActivity } = useData();
+
+  const rollback = async (log: any) => {
+    if (confirm('ต้องการย้อนกลับการกระทำนี้หรือไม่?')) {
+      await rollbackActivity(log);
+    }
+  };
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -91,6 +97,8 @@ export function ActivityLog() {
         <h2 className="text-2xl font-bold text-gray-900">ประวัติการเปลี่ยนแปลง</h2>
         <p className="text-gray-600 mt-1">
           บันทึกการเพิ่ม แก้ไข และลบข้อมูลในระบบ
+          <br />
+          คุณสามารถใช้ปุ่ม "ย้อนกลับ" เพื่อคืนค่าการกระทำล่าสุด (ถ้ามี)
         </p>
       </div>
 
@@ -174,6 +182,7 @@ export function ActivityLog() {
                   <TableHead>ชื่อรายการ</TableHead>
                   <TableHead>รายละเอียด</TableHead>
                   <TableHead>ผู้ใช้</TableHead>
+                  <TableHead className="text-center">ย้อนกลับ</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -196,10 +205,35 @@ export function ActivityLog() {
                     </TableCell>
                     <TableCell className="font-medium">{log.itemName}</TableCell>
                     <TableCell className="text-sm text-gray-600">
-                      {log.details}
+                      {(() => {
+                        try {
+                          const obj = JSON.parse(log.details);
+                          return <pre className="whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>;
+                        } catch {
+                          return log.details;
+                        }
+                      })()}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{log.user}</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        let enabled = false;
+                        try {
+                          const d = JSON.parse(log.details);
+                          enabled = !!d?.itemId;
+                        } catch {}
+                        return (
+                          <button
+                            className={`text-sm ${enabled ? 'text-blue-600 hover:underline' : 'text-gray-400 cursor-not-allowed'}`}
+                            onClick={() => enabled && rollback(log)}
+                            disabled={!enabled}
+                          >
+                            ย้อนกลับ
+                          </button>
+                        );
+                      })()}
                     </TableCell>
                   </TableRow>
                 ))}

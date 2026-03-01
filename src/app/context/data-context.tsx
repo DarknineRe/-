@@ -46,8 +46,11 @@ export interface ActivityLog {
   itemName: string;
   user: string;
   timestamp: Date;
+  // JSON string containing extra metadata used for rollback
+  // e.g. { itemId, previous?, new? }
   details: string;
 }
+
 
 interface DataContextType {
   products: Product[];
@@ -61,8 +64,7 @@ interface DataContextType {
   priceHistory: PriceHistory[];
   userRole: "owner" | "employee";
   setUserRole: (role: "owner" | "employee") => void;
-  activityLogs: ActivityLog[];
-  isLoading: boolean;
+  activityLogs: ActivityLog[];  rollbackActivity: (log: ActivityLog) => Promise<void>;  isLoading: boolean;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -75,57 +77,57 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<"owner" | "employee">("owner");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch initial data
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const [productsRes, schedulesRes, priceHistoryRes, activityLogsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/products`),
-          fetch(`${API_BASE}/api/schedules`),
-          fetch(`${API_BASE}/api/price-history`),
-          fetch(`${API_BASE}/api/activity-logs`)
-        ]);
+  // helper to load all data; used on mount and after rollbacks
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [productsRes, schedulesRes, priceHistoryRes, activityLogsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/products`),
+        fetch(`${API_BASE}/api/schedules`),
+        fetch(`${API_BASE}/api/price-history`),
+        fetch(`${API_BASE}/api/activity-logs`)
+      ]);
 
-        if (productsRes.ok) {
-          const data = await productsRes.json();
-          // Convert string dates to Date objects
-          setProducts(data.map((p: any) => ({
-            ...p,
-            harvestDate: p.harvestDate ? new Date(p.harvestDate) : undefined,
-            lastUpdated: new Date(p.lastUpdated)
-          })));
-        }
-
-        if (schedulesRes.ok) {
-          const data = await schedulesRes.json();
-          setSchedules(data.map((s: any) => ({
-            ...s,
-            plantingDate: new Date(s.plantingDate),
-            harvestDate: new Date(s.harvestDate)
-          })));
-        }
-
-        if (priceHistoryRes.ok) {
-          setPriceHistory(await priceHistoryRes.json());
-        }
-
-        if (activityLogsRes.ok) {
-          const data = await activityLogsRes.json();
-          setActivityLogs(data.map((log: any) => ({
-            ...log,
-            timestamp: new Date(log.timestamp)
-          })));
-        }
-      } catch (error) {
-        console.error("Failed to fetch initial data:", error);
-        toast.error("เกิดข้อผิดพลาดในการโหลดข้อมูล");
-      } finally {
-        setIsLoading(false);
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data.map((p: any) => ({
+          ...p,
+          harvestDate: p.harvestDate ? new Date(p.harvestDate) : undefined,
+          lastUpdated: new Date(p.lastUpdated)
+        })));
       }
-    };
 
-    fetchData();
+      if (schedulesRes.ok) {
+        const data = await schedulesRes.json();
+        setSchedules(data.map((s: any) => ({
+          ...s,
+          plantingDate: new Date(s.plantingDate),
+          harvestDate: new Date(s.harvestDate)
+        })));
+      }
+
+      if (priceHistoryRes.ok) {
+        setPriceHistory(await priceHistoryRes.json());
+      }
+
+      if (activityLogsRes.ok) {
+        const data = await activityLogsRes.json();
+        setActivityLogs(data.map((log: any) => ({
+          ...log,
+          timestamp: new Date(log.timestamp)
+        })));
+      }
+    } catch (error) {
+      console.error("Failed to fetch initial data:", error);
+      toast.error("เกิดข้อผิดพลาดในการโหลดข้อมูล");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch initial data on mount
+  useEffect(() => {
+    loadData();
   }, []);
 
   const addActivityLog = async (log: Omit<ActivityLog, "id">) => {
@@ -141,6 +143,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.error("Failed to add activity log", e);
+    }
+  };
+
+  const rollbackActivity = async (log: ActivityLog) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/activity-logs/${log.id}/rollback`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Rollback failed');
+      }
+      toast.success('ย้อนกลับการกระทำสำเร็จ');
+      // reload everything to keep state in sync
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'ย้อนกลับไม่สำเร็จ');
+      console.error('Rollback error:', err);
     }
   };
 
@@ -176,13 +196,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       toast.success("เพิ่มสินค้าสำเร็จ", { description: `เพิ่ม ${product.name} เข้าสู่ระบบแล้ว` });
 
+      // record structured details for potential rollback
       await addActivityLog({
         action: "add",
         type: "product",
         itemName: product.name,
         user: "admin",
         timestamp: new Date(),
-        details: `เพิ่มสินค้า ${product.name}`,
+        details: JSON.stringify({
+          itemId: newProduct.id,
+          new: newProduct
+        }),
       });
     } catch (error: any) {
       const errorMessage = error?.message || "เกิดข้อผิดพลาดในการเพิ่มสินค้า";
@@ -194,6 +218,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateProduct = async (updatedProduct: Product) => {
     try {
+      const oldProduct = products.find(p => p.id === updatedProduct.id);
       const payload = { ...updatedProduct, lastUpdated: new Date().toISOString() };
       const res = await fetch(`${API_BASE}/api/products/${updatedProduct.id}`, {
         method: 'PUT',
@@ -218,7 +243,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         itemName: updatedProduct.name,
         user: "admin",
         timestamp: new Date(),
-        details: `อัพเดทสินค้า ${updatedProduct.name}`,
+        details: JSON.stringify({
+          itemId: updatedProduct.id,
+          previous: oldProduct,
+          new: data
+        }),
       });
     } catch (error) {
       toast.error("เกิดข้อผิดพลาดในการอัพเดทสินค้า");
@@ -244,7 +273,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           itemName: product.name,
           user: "admin",
           timestamp: new Date(),
-          details: `ลบสินค้า ${product.name}`,
+          details: JSON.stringify({
+            itemId: product.id,
+            previous: product
+          }),
         });
       }
     } catch (error) {
@@ -278,7 +310,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         itemName: schedule.cropName,
         user: "admin",
         timestamp: new Date(),
-        details: `เพิ่มตารางการปลูก ${schedule.cropName}`,
+        details: JSON.stringify({
+          itemId: newSchedule.id,
+          new: newSchedule
+        }),
       });
     } catch (error) {
       toast.error("เกิดข้อผิดพลาดในการเพิ่มตารางปลูก");
@@ -288,6 +323,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateSchedule = async (updatedSchedule: PlantingSchedule) => {
     try {
+      const oldSchedule = schedules.find(s => s.id === updatedSchedule.id);
       const res = await fetch(`${API_BASE}/api/schedules/${updatedSchedule.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -311,7 +347,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         itemName: updatedSchedule.cropName,
         user: "admin",
         timestamp: new Date(),
-        details: `อัพเดทตารางการปลูก ${updatedSchedule.cropName}`,
+        details: JSON.stringify({
+          itemId: updatedSchedule.id,
+          previous: oldSchedule,
+          new: data
+        }),
       });
     } catch (error) {
       toast.error("เกิดข้อผิดพลาดในการอัพเดทตารางปลูก");
@@ -337,7 +377,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           itemName: schedule.cropName,
           user: "admin",
           timestamp: new Date(),
-          details: `ลบตารางการปลูก ${schedule.cropName}`,
+          details: JSON.stringify({
+            itemId: schedule.id,
+            previous: schedule
+          }),
         });
       }
     } catch (error) {
@@ -361,6 +404,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         userRole,
         setUserRole,
         activityLogs,
+        rollbackActivity,
         isLoading
       }}
     >
