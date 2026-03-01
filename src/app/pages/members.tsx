@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useWorkspace } from "../context/workspace-context";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -13,6 +14,16 @@ import {
   DialogDescription,
 } from "../components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -20,16 +31,21 @@ import {
   TableHeader,
   TableRow,
 } from "../components/ui/table";
-import { Users, UserPlus, Copy, CheckCircle, Code, Crown, User } from "lucide-react";
+import { Users, UserPlus, Copy, CheckCircle, Code, Crown, User, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 
 export function Members() {
-  const { currentWorkspace, inviteToWorkspace } = useWorkspace();
+  const navigate = useNavigate();
+  const { currentWorkspace, inviteToWorkspace, getUserRole, deleteWorkspace } = useWorkspace();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const userRole = getUserRole();
+  const isOwner = userRole === "owner";
 
   const handleCopyCode = () => {
     if (currentWorkspace) {
@@ -50,6 +66,25 @@ export function Members() {
       toast.success(`ส่งคำเชิญไปยัง ${inviteEmail} แล้ว`);
       setIsInviteDialogOpen(false);
       setInviteEmail("");
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!currentWorkspace) return;
+    setIsDeleting(true);
+    try {
+      const success = await deleteWorkspace(currentWorkspace.id);
+      if (!success) {
+        toast.error("ไม่สามารถลบ Workspace ได้");
+        return;
+      }
+      toast.success("ลบ Workspace สำเร็จ");
+      setIsDeleteConfirmOpen(false);
+      navigate("/hub");
+    } catch (error) {
+      toast.error("ไม่สามารถลบ Workspace ได้");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -75,13 +110,25 @@ export function Members() {
             จัดการสมาชิกและคำเชิญใน Workspace: {currentWorkspace.name}
           </p>
         </div>
-        <Button
-          onClick={() => setIsInviteDialogOpen(true)}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          เชิญสมาชิก
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setIsInviteDialogOpen(true)}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            เชิญสมาชิก
+          </Button>
+          {isOwner && (
+            <Button
+              variant="outline"
+              className="text-red-600 hover:text-red-700"
+              onClick={() => setIsDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              ลบ Workspace
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Workspace Info Card */}
@@ -280,6 +327,27 @@ export function Members() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ลบ Workspace</AlertDialogTitle>
+            <AlertDialogDescription>
+              ต้องการลบ Workspace {currentWorkspace.name} ใช่หรือไม่? ข้อมูลทั้งหมดใน Workspace นี้จะถูกลบสำหรับสมาชิกทุกคน
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>ยกเลิก</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteWorkspace}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "กำลังลบ..." : "ลบ Workspace"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
