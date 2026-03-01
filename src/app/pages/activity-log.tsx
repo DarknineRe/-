@@ -1,0 +1,213 @@
+import { useData } from "../context/data-context";
+import { Card } from "../components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { format } from "date-fns";
+import { th } from "date-fns/locale";
+import { Plus, Edit, Trash2, Clock, Package, Calendar } from "lucide-react";
+
+export function ActivityLog() {
+  const { activityLogs } = useData();
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case "add":
+        return <Plus className="h-4 w-4" />;
+      case "update":
+        return <Edit className="h-4 w-4" />;
+      case "delete":
+        return <Trash2 className="h-4 w-4" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const getActionBadge = (action: string) => {
+    switch (action) {
+      case "add":
+        return (
+          <Badge className="bg-green-500 hover:bg-green-600 flex items-center gap-1">
+            <Plus className="h-3 w-3" />
+            เพิ่ม
+          </Badge>
+        );
+      case "update":
+        return (
+          <Badge className="bg-blue-500 hover:bg-blue-600 flex items-center gap-1">
+            <Edit className="h-3 w-3" />
+            แก้ไข
+          </Badge>
+        );
+      case "delete":
+        return (
+          <Badge className="bg-red-500 hover:bg-red-600 flex items-center gap-1">
+            <Trash2 className="h-3 w-3" />
+            ลบ
+          </Badge>
+        );
+      default:
+        return <Badge>อื่นๆ</Badge>;
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "product":
+        return <Package className="h-4 w-4 text-green-600" />;
+      case "schedule":
+        return <Calendar className="h-4 w-4 text-blue-600" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case "product":
+        return <Badge variant="outline" className="border-green-500 text-green-700">สินค้า</Badge>;
+      case "schedule":
+        return <Badge variant="outline" className="border-blue-500 text-blue-700">แผนการปลูก</Badge>;
+      default:
+        return <Badge variant="outline">อื่นๆ</Badge>;
+    }
+  };
+
+  // Sort logs by timestamp (newest first)
+  const sortedLogs = [...activityLogs].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">ประวัติการเปลี่ยนแปลง</h2>
+        <p className="text-gray-600 mt-1">
+          บันทึกการเพิ่ม แก้ไข และลบข้อมูลในระบบ
+        </p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-100 rounded-lg">
+              <Clock className="h-5 w-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">รายการทั้งหมด</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {activityLogs.length}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Plus className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">เพิ่มข้อมูล</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {activityLogs.filter((log) => log.action === "add").length}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Edit className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">แก้ไขข้อมูล</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {activityLogs.filter((log) => log.action === "update").length}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <Trash2 className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">ลบข้อมูล</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {activityLogs.filter((log) => log.action === "delete").length}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Activity Table */}
+      <Card className="p-6">
+        {sortedLogs.length === 0 ? (
+          <div className="text-center py-12">
+            <Clock className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500 text-lg">ยังไม่มีประวัติการเปลี่ยนแปลง</p>
+            <p className="text-gray-400 text-sm mt-1">
+              เมื่อมีการเพิ่ม แก้ไข หรือลบข้อมูล ระบบจะบันทึกไว้ที่นี่
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>วันที่/เวลา</TableHead>
+                  <TableHead>การกระทำ</TableHead>
+                  <TableHead>ประเภท</TableHead>
+                  <TableHead>ชื่อรายการ</TableHead>
+                  <TableHead>รายละเอียด</TableHead>
+                  <TableHead>ผู้ใช้</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-sm">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-gray-400" />
+                        {format(new Date(log.timestamp), "d MMM yyyy, HH:mm", {
+                          locale: th,
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell>{getActionBadge(log.action)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getTypeIcon(log.type)}
+                        {getTypeBadge(log.type)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium">{log.itemName}</TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {log.details}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{log.user}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
