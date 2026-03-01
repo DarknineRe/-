@@ -64,7 +64,9 @@ interface DataContextType {
   priceHistory: PriceHistory[];
   userRole: "owner" | "employee";
   setUserRole: (role: "owner" | "employee") => void;
-  activityLogs: ActivityLog[];  rollbackActivity: (log: ActivityLog) => Promise<void>;  isLoading: boolean;
+  activityLogs: ActivityLog[];
+  rollbackActivity: (log: ActivityLog) => Promise<void>;
+  isLoading: boolean;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -114,10 +116,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       if (productsRes.ok) {
         const data = await productsRes.json();
-          setProducts(data.map((p: any) => normalizeProduct(p)));
+        setProducts(data.map((p: any) => normalizeProduct(p)));
+      }
+
       if (schedulesRes.ok) {
         const data = await schedulesRes.json();
-          setSchedules(data.map((s: any) => normalizeSchedule(s)));
+        setSchedules(data.map((s: any) => normalizeSchedule(s)));
+      }
+
       if (priceHistoryRes.ok) {
         setPriceHistory(await priceHistoryRes.json());
       }
