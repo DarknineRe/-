@@ -184,6 +184,9 @@ User logged in successfully!
 - ✅ Verify Client ID matches in environment variables
 - ✅ Check that PostgreSQL database is running
 - ✅ Set `DATABASE_URL` (or individual DB_* vars) so the server can connect
+  - example: `postgresql://farmvalley_user:uwif1uW3DVjL3a4042jpBHwNty93qmeH@dpg-d6hq4cma2pns738mf030-a.singapore-postgres.render.com:5432/farmvalley`
+  - port 5432 is the default PostgreSQL port
+  - backend service is running on Render instance `srv-d6hph914tr6s73bv8nf0` (URL `https://farmvalley.onrender.com`)
 
 ### Frontend deployment notes
 - When hosting the frontend separately from the backend, set an environment variable

@@ -7,6 +7,21 @@ require('dotenv').config();
 // user just provided.
 const connectionString = process.env.DATABASE_URL;
 
+// determine database name early so initializeDatabase can reference it
+let dbName = process.env.DB_NAME;
+if (!dbName && connectionString) {
+    try {
+        // extract pathname from connection string (/dbname)
+        const url = new URL(connectionString);
+        dbName = url.pathname.slice(1);
+    } catch (_) {
+        dbName = 'agricultural_db';
+    }
+}
+if (!dbName) {
+    dbName = 'agricultural_db';
+}
+
 let poolConfig;
 if (connectionString) {
     poolConfig = {
@@ -20,7 +35,6 @@ if (connectionString) {
         password: process.env.DB_PASSWORD || '',
         port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
     };
-    const dbName = process.env.DB_NAME || 'agricultural_db';
 
     poolConfig = {
         ...dbConfig,
@@ -35,18 +49,29 @@ const pool = new Pool(poolConfig);
 // Initialize database tables
 async function initializeDatabase() {
     try {
-        // create the database if it doesn't exist by connecting to the default 'postgres' database
-        const adminPool = new Pool({ ...dbConfig, database: 'postgres' });
-        await adminPool.query(`CREATE DATABASE "${dbName}"`).catch(err => {
-            if (err.code === '42P04') {
-                // database already exists
-                console.log(`Database '${dbName}' already exists.`);
-            } else {
-                throw err;
-            }
-        });
-        await adminPool.end();
-        console.log(`✅ Database '${dbName}' created/verified.`);
+        // if a connection string was provided, assume the database already
+        // exists and skip attempting to create it, since managed providers
+        // usually do not allow creating databases from within the database.
+        if (!connectionString) {
+            // create the database if it doesn't exist by connecting to the default 'postgres' database
+            const adminPool = new Pool({ host: process.env.DB_HOST || 'localhost',
+                                           user: process.env.DB_USER || 'postgres',
+                                           password: process.env.DB_PASSWORD || '',
+                                           port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
+                                           database: 'postgres' });
+            await adminPool.query(`CREATE DATABASE "${dbName}"`).catch(err => {
+                if (err.code === '42P04') {
+                    // database already exists
+                    console.log(`Database '${dbName}' already exists.`);
+                } else {
+                    throw err;
+                }
+            });
+            await adminPool.end();
+            console.log(`✅ Database '${dbName}' created/verified.`);
+        } else {
+            console.log('Using DATABASE_URL; skipping database creation step.');
+        }
 
         const client = await pool.connect();
 
