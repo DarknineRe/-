@@ -22,6 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  console.log('AuthProvider mounted, API_BASE =', API_BASE);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -52,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Unexpected non-JSON response from server');
       }
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        console.error('login HTTP error', response.status, response.statusText, data);
+        throw new Error(data.error || `Login failed (${response.status})`);
       }
 
       // at this point `data` already contains the parsed body
@@ -71,14 +73,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (name: string, email: string, password: string) => {
+    console.log('register called, API_BASE=', API_BASE);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/register`, {
+      const url = `${API_BASE}/api/auth/register`;
+      console.log('fetching register URL:', url);
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password })
       });
 
       if (!response.ok) {
+        console.error('register HTTP error', response.status, response.statusText);
         let errorMessage = 'Registration failed';
         try {
           const error = await response.json();

@@ -24,11 +24,13 @@ if (!dbName) {
 
 let poolConfig;
 if (connectionString) {
+    console.log('Using DATABASE_URL for postgres connection');
     poolConfig = {
         connectionString,
         max: 10
     };
 } else {
+    console.warn('WARNING: DATABASE_URL not set, falling back to individual DB_* variables (likely localhost)');
     const dbConfig = {
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'postgres',
@@ -73,7 +75,13 @@ async function initializeDatabase() {
             console.log('Using DATABASE_URL; skipping database creation step.');
         }
 
-        const client = await pool.connect();
+        let client;
+        try {
+            client = await pool.connect();
+        } catch (connErr) {
+            console.error('Failed to obtain a database connection:', connErr.message);
+            throw connErr;
+        }
 
         // create tables with Postgres syntax
         await client.query(`
