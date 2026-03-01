@@ -1,22 +1,36 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// PostgreSQL configuration (env vars follow typical PG naming)
-const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '',
-    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-};
+// PostgreSQL configuration. Prefer a single DATABASE_URL if provided,
+// otherwise fall back to individual components.  Render (and many
+// hosted Postgres services) expose a connection string like the one the
+// user just provided.
+const connectionString = process.env.DATABASE_URL;
 
-const dbName = process.env.DB_NAME || 'agricultural_db';
+let poolConfig;
+if (connectionString) {
+    poolConfig = {
+        connectionString,
+        max: 10
+    };
+} else {
+    const dbConfig = {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+        port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
+    };
+    const dbName = process.env.DB_NAME || 'agricultural_db';
+
+    poolConfig = {
+        ...dbConfig,
+        database: dbName,
+        max: 10
+    };
+}
 
 // pool connected to the application database (created/verified below)
-const pool = new Pool({
-    ...dbConfig,
-    database: dbName,
-    max: 10
-});
+const pool = new Pool(poolConfig);
 
 // Initialize database tables
 async function initializeDatabase() {

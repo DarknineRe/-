@@ -81,11 +81,17 @@ Role: admin
 ```sql
 CREATE DATABASE agricultural_db;
 ```
-### 2. Frontend deployment
+
+### 2. Configure connection string
+- Set `DATABASE_URL` to your connection URI (e.g. the Render URL provided)
+  or use the individual `DB_HOST`, `DB_USER`, etc variables if you prefer.
+
+### 3. Frontend deployment
 - Build the React app with `npm run build` (run inside `src` if using separate package).
 - Set `VITE_API_BASE=https://farmvalley.onrender.com` (or your backend URL) before
   building/serving so that API requests target the deployed backend.
-### 2. Create `.env` file in `/server` directory:
+
+### 4. Create `.env` file in `/server` directory (if not using DATABASE_URL):
 ```
 DB_HOST=localhost
 DB_PORT=5432

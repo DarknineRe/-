@@ -183,6 +183,7 @@ User logged in successfully!
 - ✅ Check backend logs for detailed error
 - ✅ Verify Client ID matches in environment variables
 - ✅ Check that PostgreSQL database is running
+- ✅ Set `DATABASE_URL` (or individual DB_* vars) so the server can connect
 
 ### Frontend deployment notes
 - When hosting the frontend separately from the backend, set an environment variable
