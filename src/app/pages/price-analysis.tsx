@@ -148,6 +148,43 @@ export function PriceAnalysis() {
 
   const recommendations = selectedCrop ? getRecommendations(selectedCrop) : [];
 
+  const trendSignal = useMemo(() => {
+    if (!selectedCrop) return null;
+
+    const prices = priceHistory
+      .map((h) => h[selectedCrop] as number)
+      .filter((p) => typeof p === "number" && !isNaN(p));
+
+    if (prices.length < 2) return null;
+
+    const recent = prices.slice(-3);
+    const firstRecent = recent[0];
+    const lastRecent = recent[recent.length - 1];
+    const shortTermPercent = firstRecent > 0
+      ? ((lastRecent - firstRecent) / firstRecent) * 100
+      : 0;
+
+    const avg = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+    const variance = prices.reduce((sum, p) => sum + Math.pow(p - avg, 2), 0) / prices.length;
+    const stdDev = Math.sqrt(variance);
+    const volatilityPercent = avg > 0 ? (stdDev / avg) * 100 : 0;
+
+    let direction: "up" | "down" | "stable" = "stable";
+    if (shortTermPercent > 3) direction = "up";
+    else if (shortTermPercent < -3) direction = "down";
+
+    let volatilityLevel: "low" | "medium" | "high" = "low";
+    if (volatilityPercent >= 15) volatilityLevel = "high";
+    else if (volatilityPercent >= 8) volatilityLevel = "medium";
+
+    return {
+      shortTermPercent,
+      volatilityPercent,
+      direction,
+      volatilityLevel,
+    };
+  }, [priceHistory, selectedCrop]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -281,6 +318,71 @@ export function PriceAnalysis() {
               })}
             </LineChart>
           </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Trend Signal */}
+      {trendSignal && selectedCrop && (
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            {trendSignal.direction === "up" ? (
+              <TrendingUp className="h-5 w-5 text-green-600" />
+            ) : trendSignal.direction === "down" ? (
+              <TrendingDown className="h-5 w-5 text-red-600" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-blue-600" />
+            )}
+            <h3 className="text-lg font-semibold">สัญญาณแนวโน้มระยะสั้น</h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <Badge
+              className={
+                trendSignal.direction === "up"
+                  ? "bg-green-600"
+                  : trendSignal.direction === "down"
+                  ? "bg-red-600"
+                  : "bg-blue-600"
+              }
+            >
+              {trendSignal.direction === "up"
+                ? "แนวโน้มขึ้น"
+                : trendSignal.direction === "down"
+                ? "แนวโน้มลง"
+                : "ทรงตัว"}
+            </Badge>
+
+            <Badge variant="secondary">
+              เปลี่ยนแปลง 3 เดือนล่าสุด {trendSignal.shortTermPercent >= 0 ? "+" : ""}
+              {trendSignal.shortTermPercent.toFixed(1)}%
+            </Badge>
+
+            <Badge
+              variant="outline"
+              className={
+                trendSignal.volatilityLevel === "high"
+                  ? "text-red-700"
+                  : trendSignal.volatilityLevel === "medium"
+                  ? "text-amber-700"
+                  : "text-green-700"
+              }
+            >
+              ความผันผวน {trendSignal.volatilityLevel === "high"
+                ? "สูง"
+                : trendSignal.volatilityLevel === "medium"
+                ? "ปานกลาง"
+                : "ต่ำ"}
+            </Badge>
+          </div>
+
+          <p className="text-sm text-gray-600">
+            {selectedCrop} มีความผันผวนประมาณ {trendSignal.volatilityPercent.toFixed(1)}% จากราคาเฉลี่ย
+            {trendSignal.direction === "up"
+              ? " เหมาะสำหรับติดตามจังหวะขายในช่วงใกล้เคียงนี้"
+              : trendSignal.direction === "down"
+              ? " ควรระวังการขายเร่งด่วนและติดตามราคาตลาดเพิ่ม"
+              : " แนวโน้มยังนิ่ง เหมาะกับการวางแผนแบบค่อยเป็นค่อยไป"}
+          </p>
         </Card>
       )}
 
