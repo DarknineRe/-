@@ -364,9 +364,35 @@ app.delete('/api/schedules/:id', async (req, res) => {
 
 app.get('/api/price-history', async (req, res) => {
     try {
+        // Primary source: normalized market_prices table
+        const marketPriceSql = `
+            SELECT to_char(date, 'YYYY-MM') AS period,
+                   product_name,
+                   AVG(avg_price)::float8 AS avg_price
+            FROM market_prices
+            WHERE product_name IS NOT NULL AND product_name <> ''
+            GROUP BY period, product_name
+            ORDER BY period ASC
+        `;
+        const { rows: marketRows } = await pool.query(marketPriceSql);
+
+        if (marketRows.length > 0) {
+            const grouped = new Map();
+
+            for (const row of marketRows) {
+                if (!grouped.has(row.period)) {
+                    grouped.set(row.period, { date: row.period });
+                }
+                const target = grouped.get(row.period);
+                target[row.product_name] = Number(row.avg_price);
+            }
+
+            return res.json(Array.from(grouped.values()));
+        }
+
+        // Fallback source: legacy price_history table
         const { rows } = await pool.query('SELECT * FROM price_history ORDER BY id ASC');
-        // Parse cropData JSON back to object
-        const formattedRows = rows.map(r => ({
+        const formattedRows = rows.map((r) => ({
             date: r.date,
             ...JSON.parse(r.cropData)
         }));
