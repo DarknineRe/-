@@ -47,7 +47,6 @@ export function AddProductDialog({
     category: "",
     quantity: "",
     unit: "",
-    minStock: "",
     harvestDate: "",
   });
 
@@ -75,18 +74,13 @@ export function AddProductDialog({
       return;
     }
 
-    if (!formData.minStock || Number(formData.minStock) < 0) {
-      toast.error("กรุณากรอกสต็อกขั้นต่ำที่ถูกต้อง");
-      return;
-    }
-
     try {
       await addProduct({
         name: formData.name,
         category: formData.category,
         quantity: Number(formData.quantity),
         unit: formData.unit,
-        minStock: Number(formData.minStock),
+        minStock: 0,
         harvestDate: formData.harvestDate || undefined,
       });
 
@@ -96,7 +90,6 @@ export function AddProductDialog({
         category: "",
         quantity: "",
         unit: "",
-        minStock: "",
         harvestDate: "",
       });
       onOpenChange(false);
@@ -184,21 +177,6 @@ export function AddProductDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="minStock">สต็อกขั้นต่ำ *</Label>
-              <Input
-                id="minStock"
-                type="number"
-                required
-                min="0"
-                value={formData.minStock}
-                onChange={(e) =>
-                  setFormData({ ...formData, minStock: e.target.value })
-                }
-                placeholder="0"
-              />
             </div>
 
             <div className="space-y-2">

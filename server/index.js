@@ -660,6 +660,7 @@ app.get('/api/price-history', async (req, res) => {
     try {
         const workspaceId = requireWorkspaceId(req, res);
         if (!workspaceId) return;
+
         // Primary source: normalized market_prices table
         const marketPriceSql = `
             SELECT to_char(date, 'YYYY-MM') AS period,
@@ -671,7 +672,12 @@ app.get('/api/price-history', async (req, res) => {
             GROUP BY period, product_name
             ORDER BY period ASC
         `;
-        const { rows: marketRows } = await pool.query(marketPriceSql, [workspaceId]);
+        let { rows: marketRows } = await pool.query(marketPriceSql, [workspaceId]);
+
+        if (marketRows.length === 0 && workspaceId !== 'default') {
+            const fallbackResult = await pool.query(marketPriceSql, ['default']);
+            marketRows = fallbackResult.rows;
+        }
 
         if (marketRows.length > 0) {
             const grouped = new Map();
@@ -688,7 +694,12 @@ app.get('/api/price-history', async (req, res) => {
         }
 
         // Fallback source: legacy price_history table
-        const { rows } = await pool.query('SELECT * FROM price_history WHERE workspace_id = $1 ORDER BY id ASC', [workspaceId]);
+        let { rows } = await pool.query('SELECT * FROM price_history WHERE workspace_id = $1 ORDER BY id ASC', [workspaceId]);
+
+        if (rows.length === 0 && workspaceId !== 'default') {
+            const fallbackResult = await pool.query('SELECT * FROM price_history WHERE workspace_id = $1 ORDER BY id ASC', ['default']);
+            rows = fallbackResult.rows;
+        }
         const formattedRows = rows.map((r) => {
             const rawCropData = r.cropData ?? r.cropdata ?? {};
 

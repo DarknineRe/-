@@ -49,7 +49,6 @@ export function EditProductDialog({
     category: product.category,
     quantity: product.quantity.toString(),
     unit: product.unit,
-    minStock: product.minStock.toString(),
     harvestDate: product.harvestDate
       ? new Date(product.harvestDate).toISOString().split("T")[0]
       : "",
@@ -61,7 +60,6 @@ export function EditProductDialog({
       category: product.category,
       quantity: product.quantity.toString(),
       unit: product.unit,
-      minStock: product.minStock.toString(),
       harvestDate: product.harvestDate
         ? new Date(product.harvestDate).toISOString().split("T")[0]
         : "",
@@ -77,7 +75,7 @@ export function EditProductDialog({
       category: formData.category,
       quantity: Number(formData.quantity),
       unit: formData.unit,
-      minStock: Number(formData.minStock),
+      minStock: product.minStock,
       harvestDate: formData.harvestDate ? new Date(formData.harvestDate) : undefined,
     });
 
@@ -163,21 +161,6 @@ export function EditProductDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-minStock">สต็อกขั้นต่ำ *</Label>
-              <Input
-                id="edit-minStock"
-                type="number"
-                required
-                min="0"
-                value={formData.minStock}
-                onChange={(e) =>
-                  setFormData({ ...formData, minStock: e.target.value })
-                }
-                placeholder="0"
-              />
             </div>
 
             <div className="space-y-2">

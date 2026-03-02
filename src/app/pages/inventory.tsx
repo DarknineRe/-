@@ -58,8 +58,6 @@ export function Inventory() {
   const getStockStatus = (product: Product) => {
     if (product.quantity === 0) {
       return { label: "สินค้าหมด", variant: "destructive" as const };
-    } else if (product.quantity <= product.minStock) {
-      return { label: "ใกล้หมด", variant: "secondary" as const };
     }
     return { label: "มีสินค้า", variant: "default" as const };
   };
@@ -137,9 +135,6 @@ export function Inventory() {
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">
                         {product.name}
-                        {product.quantity <= product.minStock && (
-                          <AlertCircle className="inline-block ml-2 h-4 w-4 text-amber-500" />
-                        )}
                       </TableCell>
                       <TableCell>{product.category}</TableCell>
                       <TableCell className="text-right">

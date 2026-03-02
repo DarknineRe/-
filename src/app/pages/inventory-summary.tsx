@@ -32,7 +32,7 @@ export function InventorySummary() {
   // คำนวณสถิติ
   const totalProducts = products.length;
   const totalQuantity = products.reduce((sum, p) => sum + p.quantity, 0);
-  const lowStockProducts = products.filter((p) => p.quantity <= p.minStock);
+  const lowStockProducts = products.filter((p) => p.quantity === 0);
 
   // จัดกลุ่มตามหมวดหมู่
   const categoryData = products.reduce((acc, product) => {
@@ -263,7 +263,7 @@ export function InventorySummary() {
                 แจ้งเตือน: สินค้าใกล้หมด
               </h3>
               <p className="text-sm text-red-700 mb-3">
-                มีสินค้า {lowStockProducts.length} รายการที่มีจำนวนต่ำกว่าหรือเท่ากับสต็อกขั้นต่ำ
+                มีสินค้า {lowStockProducts.length} รายการที่หมดสต็อก
               </p>
               <div className="space-y-2">
                 {lowStockProducts.map((product) => (
@@ -280,9 +280,7 @@ export function InventorySummary() {
                         </p>
                       </div>
                     </div>
-                    <Badge variant="destructive">
-                      สต็อกขั้นต่ำ: {product.minStock}
-                    </Badge>
+                    <Badge variant="destructive">สินค้าหมด</Badge>
                   </div>
                 ))}
               </div>

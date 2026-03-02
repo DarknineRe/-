@@ -25,7 +25,7 @@ import { Badge } from "../components/ui/badge";
 export function Dashboard() {
   const { products, schedules, priceHistory } = useData();
 
-  const lowStockProducts = products.filter((p) => p.quantity <= p.minStock);
+  const lowStockProducts = products.filter((p) => p.quantity === 0);
   const activePlantings = schedules.filter((s) => s.status === "planted").length;
   const plannedPlantings = schedules.filter((s) => s.status === "planned").length;
 
