@@ -105,6 +105,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     notes: row.notes
   });
 
+  const normalizeActivityLog = (row: any) => ({
+    ...row,
+    itemName: row.itemName ?? row.itemname ?? '',
+    timestamp: new Date(row.timestamp)
+  });
+
   // helper to load all data; used on mount and after rollbacks
   const loadData = async () => {
     if (!currentWorkspace?.id) {
@@ -142,10 +148,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       if (activityLogsRes.ok) {
         const data = await activityLogsRes.json();
-        setActivityLogs(data.map((log: any) => ({
-          ...log,
-          timestamp: new Date(log.timestamp)
-        })));
+        setActivityLogs(data.map((log: any) => normalizeActivityLog(log)));
       }
     } catch (error) {
       console.error("Failed to fetch initial data:", error);
@@ -172,7 +175,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       });
       if (res.ok) {
         const newLog = await res.json();
-        setActivityLogs(prev => [{ ...newLog, timestamp: new Date(newLog.timestamp) }, ...prev].slice(0, 50));
+        setActivityLogs(prev => [normalizeActivityLog(newLog), ...prev].slice(0, 50));
       }
     } catch (e) {
       console.error("Failed to add activity log", e);

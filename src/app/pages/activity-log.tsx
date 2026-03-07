@@ -43,7 +43,8 @@ function getTypeThaiText(type: string): string {
 function getDescription(action: string, type: string, itemName: string): string {
   const actionTh = getActionThaiText(action);
   const typeTh = getTypeThaiText(type);
-  return `${actionTh}${typeTh} ${itemName}`;
+  const safeItemName = itemName?.trim() || "รายการ";
+  return `${actionTh}${typeTh} ${safeItemName}`;
 }
 
 export function ActivityLog() {
