@@ -35,6 +35,7 @@ interface MOCPriceData {
 
 function normalizeDisplayName(name: string) {
   return String(name || "")
+    .replace(/\s*\(\s*บาท\s*\/\s*กก\.?\s*\)\s*/gi, " ")
     .replace(/\s+(คละ|คัด)(?=\s*\(|$)/g, "")
     .replace(/\s+/g, " ")
     .trim();

@@ -69,22 +69,54 @@ function getPriceLevel(
   return "medium";
 }
 
+function normalizeCropName(name: string) {
+  return String(name || "")
+    .replace(/\s+(คละ|คัด)(?=\s*\(|$)/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export function Recommendations() {
-  const { priceHistory, schedules } = useData();
+  const { priceHistory } = useData();
   const currentSeason = getCurrentSeason();
   const seasonData = seasons[currentSeason];
 
+  const availableCrops = Array.from(
+    new Set(
+      priceHistory.flatMap((row) =>
+        Object.keys(row).filter((key) => key !== "date" && !key.startsWith("__"))
+      )
+    )
+  );
+
+  const resolveCropKey = (cropName: string) => {
+    const normalizedTarget = normalizeCropName(cropName);
+    return (
+      availableCrops.find((key) => normalizeCropName(key) === normalizedTarget) ||
+      availableCrops.find((key) => normalizeCropName(key).includes(normalizedTarget)) ||
+      availableCrops.find((key) => normalizedTarget.includes(normalizeCropName(key))) ||
+      null
+    );
+  };
+
   // คำนวณข้อมูลราคาสำหรับพืชแต่ละชนิด
   const getPriceInfo = (cropName: string) => {
-    const crop = priceHistory[0];
-    if (!crop || !(cropName in crop)) return null;
+    const resolvedCropKey = resolveCropKey(cropName);
+    if (!resolvedCropKey) return null;
 
-    const prices = priceHistory.map((h) => h[cropName] as number);
+    const prices = priceHistory
+      .map((h) => h[resolvedCropKey] as number)
+      .filter((value) => typeof value === "number" && !isNaN(value));
+
+    if (prices.length === 0) return null;
+
     const currentPrice = prices[prices.length - 1];
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
     const priceLevel = getPriceLevel(currentPrice, avgPrice);
 
-    return { currentPrice, avgPrice, priceLevel };
+    return { currentPrice, avgPrice, priceLevel, matchedCropName: resolvedCropKey };
   };
 
   // แนะนำพืชตามฤดูกาลปัจจุบัน
@@ -98,8 +130,7 @@ export function Recommendations() {
   });
 
   // แนะนำพืชที่มีราคาดี (high price)
-  const highPriceCrops = Object.keys(priceHistory[0] || {})
-    .filter((key) => key !== "date")
+  const highPriceCrops = availableCrops
     .map((cropName) => {
       const priceInfo = getPriceInfo(cropName);
       return { cropName, priceInfo };

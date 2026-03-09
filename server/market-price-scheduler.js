@@ -21,6 +21,7 @@ const EXTRA_P13_PRODUCTS = Array.from({ length: 92 }, (_, i) => {
 
 function normalizeMarketProductName(name) {
     return String(name || '')
+    .replace(/\s*\(\s*บาท\s*\/\s*กก\.?\s*\)\s*/gi, ' ')
         .replace(/\s+(คละ|คัด)(?=\s*\(|$)/g, '')
         .replace(/\s+/g, ' ')
         .trim();

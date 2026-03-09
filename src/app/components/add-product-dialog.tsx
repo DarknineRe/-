@@ -41,7 +41,7 @@ export function AddProductDialog({
   open,
   onOpenChange,
 }: AddProductDialogProps) {
-  const { addProduct } = useData();
+  const { addProduct, products } = useData();
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -50,6 +50,46 @@ export function AddProductDialog({
     unit: "",
     harvestDate: "",
   });
+
+  const normalizedName = formData.name.trim().toLowerCase();
+  const productTemplates = products.reduce(
+    (acc, product) => {
+      const key = `${product.name.trim().toLowerCase()}|${product.category}|${product.unit}`;
+      if (!acc.seen.has(key)) {
+        acc.seen.add(key);
+        acc.items.push({
+          name: product.name,
+          category: product.category,
+          unit: product.unit,
+        });
+      }
+      return acc;
+    },
+    {
+      seen: new Set<string>(),
+      items: [] as Array<{ name: string; category: string; unit: string }>,
+    }
+  ).items;
+
+  const nameSuggestions =
+    normalizedName.length === 0
+      ? []
+      : productTemplates
+          .filter((item) => item.name.toLowerCase().includes(normalizedName))
+          .slice(0, 6);
+
+  const hasExactMatch = productTemplates.some(
+    (item) => item.name.trim().toLowerCase() === normalizedName
+  );
+
+  const applyTemplate = (template: { name: string; category: string; unit: string }) => {
+    setFormData((prev) => ({
+      ...prev,
+      name: template.name,
+      category: template.category,
+      unit: template.unit,
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,6 +165,20 @@ export function AddProductDialog({
                 }
                 placeholder="ระบุชื่อสินค้า"
               />
+              {nameSuggestions.length > 0 && !hasExactMatch && (
+                <div className="rounded-md border border-green-200 bg-green-50 p-2 space-y-1 max-h-36 overflow-y-auto">
+                  {nameSuggestions.map((item) => (
+                    <button
+                      key={`${item.name}-${item.category}-${item.unit}`}
+                      type="button"
+                      className="w-full text-left text-sm rounded px-2 py-1 hover:bg-green-100"
+                      onClick={() => applyTemplate(item)}
+                    >
+                      {item.name} • {item.category} • {item.unit}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

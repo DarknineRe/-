@@ -139,6 +139,7 @@ export function AddScheduleDialog({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    type="button"
                     variant="outline"
                     className="w-full justify-start text-left font-normal"
                   >
@@ -164,6 +165,7 @@ export function AddScheduleDialog({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
+                    type="button"
                     variant="outline"
                     className="w-full justify-start text-left font-normal"
                   >
