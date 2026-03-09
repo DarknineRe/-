@@ -53,6 +53,19 @@ app.get('/api/workspaces', async (req, res) => {
                 w.created_at,
                 wm.user_id AS member_user_id,
                 wm.role AS member_role,
+                wm.can_view AS member_can_view,
+                wm.can_add AS member_can_add,
+                wm.can_edit AS member_can_edit,
+                wm.can_manage_permissions AS member_can_manage_permissions,
+                wm.view_dashboard AS member_view_dashboard,
+                wm.view_inventory AS member_view_inventory,
+                wm.view_summary AS member_view_summary,
+                wm.view_calendar AS member_view_calendar,
+                wm.view_analysis AS member_view_analysis,
+                wm.view_price_comparison AS member_view_price_comparison,
+                wm.view_recommendations AS member_view_recommendations,
+                wm.view_members AS member_view_members,
+                wm.view_activity AS member_view_activity,
                 wm.joined_at AS member_joined_at,
                 u.name AS member_name,
                 u.email AS member_email
@@ -85,6 +98,19 @@ app.get('/api/workspaces', async (req, res) => {
                 name: row.member_name,
                 email: row.member_email,
                 role: row.member_role,
+                canView: row.member_role === 'owner' ? true : row.member_can_view,
+                canAdd: row.member_role === 'owner' ? true : row.member_can_add,
+                canEdit: row.member_role === 'owner' ? true : row.member_can_edit,
+                canManagePermissions: row.member_role === 'owner' ? true : row.member_can_manage_permissions,
+                viewDashboard: row.member_role === 'owner' ? true : row.member_view_dashboard,
+                viewInventory: row.member_role === 'owner' ? true : row.member_view_inventory,
+                viewSummary: row.member_role === 'owner' ? true : row.member_view_summary,
+                viewCalendar: row.member_role === 'owner' ? true : row.member_view_calendar,
+                viewAnalysis: row.member_role === 'owner' ? true : row.member_view_analysis,
+                viewPriceComparison: row.member_role === 'owner' ? true : row.member_view_price_comparison,
+                viewRecommendations: row.member_role === 'owner' ? true : row.member_view_recommendations,
+                viewMembers: row.member_role === 'owner' ? true : row.member_view_members,
+                viewActivity: row.member_role === 'owner' ? true : row.member_view_activity,
                 joinedAt: row.member_joined_at
             });
         }
@@ -115,8 +141,25 @@ app.post('/api/workspaces', async (req, res) => {
         );
 
         await client.query(
-            'INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)',
-            [id, String(ownerId), 'owner']
+            `INSERT INTO workspace_members (
+                workspace_id,
+                user_id,
+                role,
+                can_view,
+                can_add,
+                can_edit,
+                can_manage_permissions,
+                view_dashboard,
+                view_inventory,
+                view_summary,
+                view_calendar,
+                view_analysis,
+                view_price_comparison,
+                view_recommendations,
+                view_members,
+                view_activity
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+            [id, String(ownerId), 'owner', true, true, true, true, true, true, true, true, true, true, true, true, true]
         );
 
         await client.query('COMMIT');
@@ -130,6 +173,19 @@ app.post('/api/workspaces', async (req, res) => {
                 w.created_at,
                 wm.user_id AS member_user_id,
                 wm.role AS member_role,
+                wm.can_view AS member_can_view,
+                wm.can_add AS member_can_add,
+                wm.can_edit AS member_can_edit,
+                wm.can_manage_permissions AS member_can_manage_permissions,
+                wm.view_dashboard AS member_view_dashboard,
+                wm.view_inventory AS member_view_inventory,
+                wm.view_summary AS member_view_summary,
+                wm.view_calendar AS member_view_calendar,
+                wm.view_analysis AS member_view_analysis,
+                wm.view_price_comparison AS member_view_price_comparison,
+                wm.view_recommendations AS member_view_recommendations,
+                wm.view_members AS member_view_members,
+                wm.view_activity AS member_view_activity,
                 wm.joined_at AS member_joined_at,
                 u.name AS member_name,
                 u.email AS member_email
@@ -152,6 +208,19 @@ app.post('/api/workspaces', async (req, res) => {
                 name: row.member_name,
                 email: row.member_email,
                 role: row.member_role,
+                canView: row.member_role === 'owner' ? true : row.member_can_view,
+                canAdd: row.member_role === 'owner' ? true : row.member_can_add,
+                canEdit: row.member_role === 'owner' ? true : row.member_can_edit,
+                canManagePermissions: row.member_role === 'owner' ? true : row.member_can_manage_permissions,
+                viewDashboard: row.member_role === 'owner' ? true : row.member_view_dashboard,
+                viewInventory: row.member_role === 'owner' ? true : row.member_view_inventory,
+                viewSummary: row.member_role === 'owner' ? true : row.member_view_summary,
+                viewCalendar: row.member_role === 'owner' ? true : row.member_view_calendar,
+                viewAnalysis: row.member_role === 'owner' ? true : row.member_view_analysis,
+                viewPriceComparison: row.member_role === 'owner' ? true : row.member_view_price_comparison,
+                viewRecommendations: row.member_role === 'owner' ? true : row.member_view_recommendations,
+                viewMembers: row.member_role === 'owner' ? true : row.member_view_members,
+                viewActivity: row.member_role === 'owner' ? true : row.member_view_activity,
                 joinedAt: row.member_joined_at
             }))
         };
@@ -189,10 +258,26 @@ app.post('/api/workspaces/join', async (req, res) => {
         const workspace = workspaces[0];
 
         await client.query(
-            `INSERT INTO workspace_members (workspace_id, user_id, role)
-             VALUES ($1, $2, $3)
+            `INSERT INTO workspace_members (
+                workspace_id,
+                user_id,
+                role,
+                can_view,
+                can_add,
+                can_edit,
+                can_manage_permissions,
+                view_dashboard,
+                view_inventory,
+                view_summary,
+                view_calendar,
+                view_analysis,
+                view_price_comparison,
+                view_recommendations,
+                view_members,
+                view_activity
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              ON CONFLICT (workspace_id, user_id) DO NOTHING`,
-            [workspace.id, String(userId), 'employee']
+            [workspace.id, String(userId), 'employee', true, false, false, false, true, true, true, true, true, true, true, true, true]
         );
 
         await client.query('COMMIT');
@@ -201,6 +286,19 @@ app.post('/api/workspaces/join', async (req, res) => {
             SELECT
                 wm.user_id AS member_user_id,
                 wm.role AS member_role,
+                wm.can_view AS member_can_view,
+                wm.can_add AS member_can_add,
+                wm.can_edit AS member_can_edit,
+                wm.can_manage_permissions AS member_can_manage_permissions,
+                wm.view_dashboard AS member_view_dashboard,
+                wm.view_inventory AS member_view_inventory,
+                wm.view_summary AS member_view_summary,
+                wm.view_calendar AS member_view_calendar,
+                wm.view_analysis AS member_view_analysis,
+                wm.view_price_comparison AS member_view_price_comparison,
+                wm.view_recommendations AS member_view_recommendations,
+                wm.view_members AS member_view_members,
+                wm.view_activity AS member_view_activity,
                 wm.joined_at AS member_joined_at,
                 u.name AS member_name,
                 u.email AS member_email
@@ -223,6 +321,19 @@ app.post('/api/workspaces/join', async (req, res) => {
                 name: row.member_name,
                 email: row.member_email,
                 role: row.member_role,
+                canView: row.member_role === 'owner' ? true : row.member_can_view,
+                canAdd: row.member_role === 'owner' ? true : row.member_can_add,
+                canEdit: row.member_role === 'owner' ? true : row.member_can_edit,
+                canManagePermissions: row.member_role === 'owner' ? true : row.member_can_manage_permissions,
+                viewDashboard: row.member_role === 'owner' ? true : row.member_view_dashboard,
+                viewInventory: row.member_role === 'owner' ? true : row.member_view_inventory,
+                viewSummary: row.member_role === 'owner' ? true : row.member_view_summary,
+                viewCalendar: row.member_role === 'owner' ? true : row.member_view_calendar,
+                viewAnalysis: row.member_role === 'owner' ? true : row.member_view_analysis,
+                viewPriceComparison: row.member_role === 'owner' ? true : row.member_view_price_comparison,
+                viewRecommendations: row.member_role === 'owner' ? true : row.member_view_recommendations,
+                viewMembers: row.member_role === 'owner' ? true : row.member_view_members,
+                viewActivity: row.member_role === 'owner' ? true : row.member_view_activity,
                 joinedAt: row.member_joined_at
             }))
         });
@@ -273,6 +384,156 @@ app.delete('/api/workspaces/:id', async (req, res) => {
         res.json({
             success: true,
             deleted: deleteResult.rowCount > 0
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+app.put('/api/workspaces/:id/members/:memberId/permissions', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const workspaceId = req.params.id;
+        const memberId = req.params.memberId;
+        const {
+            requesterUserId,
+            canView,
+            canAdd,
+            canEdit,
+            canManagePermissions,
+            viewDashboard,
+            viewInventory,
+            viewSummary,
+            viewCalendar,
+            viewAnalysis,
+            viewPriceComparison,
+            viewRecommendations,
+            viewMembers,
+            viewActivity,
+        } = req.body;
+
+        if (!workspaceId || !memberId || !requesterUserId) {
+            return res.status(400).json({ error: 'workspace id, member id and requesterUserId are required' });
+        }
+
+        await client.query('BEGIN');
+
+        const { rows: requesterRows } = await client.query(
+            `SELECT role, can_manage_permissions
+             FROM workspace_members
+             WHERE workspace_id = $1 AND user_id = $2
+             LIMIT 1`,
+            [workspaceId, String(requesterUserId)]
+        );
+
+        if (requesterRows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'Requester is not a workspace member' });
+        }
+
+        const requester = requesterRows[0];
+        const canManage = requester.role === 'owner' || requester.can_manage_permissions === true;
+        if (!canManage) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ error: 'No permission to manage member permissions' });
+        }
+
+        const { rows: targetRows } = await client.query(
+            `SELECT
+                user_id,
+                role,
+                can_view,
+                can_add,
+                can_edit,
+                can_manage_permissions,
+                view_dashboard,
+                view_inventory,
+                view_summary,
+                view_calendar,
+                view_analysis,
+                view_price_comparison,
+                view_recommendations,
+                view_members,
+                view_activity
+             FROM workspace_members
+             WHERE workspace_id = $1 AND user_id = $2
+             LIMIT 1`,
+            [workspaceId, String(memberId)]
+        );
+
+        if (targetRows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Target member not found' });
+        }
+
+        if (targetRows[0].role === 'owner') {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Owner permissions are fixed and cannot be modified' });
+        }
+
+        const current = targetRows[0];
+        const pickBool = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
+        const normalized = {
+            canView: pickBool(canView, current.can_view),
+            canAdd: pickBool(canAdd, current.can_add),
+            canEdit: pickBool(canEdit, current.can_edit),
+            canManagePermissions: pickBool(canManagePermissions, current.can_manage_permissions),
+            viewDashboard: pickBool(viewDashboard, current.view_dashboard),
+            viewInventory: pickBool(viewInventory, current.view_inventory),
+            viewSummary: pickBool(viewSummary, current.view_summary),
+            viewCalendar: pickBool(viewCalendar, current.view_calendar),
+            viewAnalysis: pickBool(viewAnalysis, current.view_analysis),
+            viewPriceComparison: pickBool(viewPriceComparison, current.view_price_comparison),
+            viewRecommendations: pickBool(viewRecommendations, current.view_recommendations),
+            viewMembers: pickBool(viewMembers, current.view_members),
+            viewActivity: pickBool(viewActivity, current.view_activity),
+        };
+
+        await client.query(
+            `UPDATE workspace_members
+             SET can_view = $1,
+                 can_add = $2,
+                 can_edit = $3,
+                 can_manage_permissions = $4,
+                 view_dashboard = $5,
+                 view_inventory = $6,
+                 view_summary = $7,
+                 view_calendar = $8,
+                 view_analysis = $9,
+                 view_price_comparison = $10,
+                 view_recommendations = $11,
+                 view_members = $12,
+                 view_activity = $13
+             WHERE workspace_id = $14 AND user_id = $15`,
+            [
+                normalized.canView,
+                normalized.canAdd,
+                normalized.canEdit,
+                normalized.canManagePermissions,
+                normalized.viewDashboard,
+                normalized.viewInventory,
+                normalized.viewSummary,
+                normalized.viewCalendar,
+                normalized.viewAnalysis,
+                normalized.viewPriceComparison,
+                normalized.viewRecommendations,
+                normalized.viewMembers,
+                normalized.viewActivity,
+                workspaceId,
+                String(memberId),
+            ]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            workspaceId,
+            memberId: String(memberId),
+            permissions: normalized,
         });
     } catch (err) {
         await client.query('ROLLBACK');
@@ -760,12 +1021,17 @@ app.post('/api/activity-logs', async (req, res) => {
 
 // rollback endpoint for undoing logged actions
 app.post('/api/activity-logs/:id/rollback', async (req, res) => {
+    const client = await pool.connect();
     try {
         const workspaceId = requireWorkspaceId(req, res);
         if (!workspaceId) return;
         const { id } = req.params;
-        const { rows } = await pool.query('SELECT * FROM activity_logs WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+
+        await client.query('BEGIN');
+
+        const { rows } = await client.query('SELECT * FROM activity_logs WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
         if (rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'Log not found' });
         }
         const log = rows[0];
@@ -777,19 +1043,20 @@ app.post('/api/activity-logs/:id/rollback', async (req, res) => {
         }
 
         // require an itemId at minimum for rollback
-        const itemId = details?.itemId;
+        const itemId = details?.itemId || details?.item_id;
         if (!itemId) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Insufficient rollback information' });
         }
 
         // helper functions for each type
         const rollbackProduct = async () => {
             if (log.action === 'add') {
-                await pool.query('DELETE FROM products WHERE id = $1 AND workspace_id = $2', [itemId, workspaceId]);
+                await client.query('DELETE FROM products WHERE id = $1 AND workspace_id = $2', [itemId, workspaceId]);
             } else if (log.action === 'delete') {
-                const prev = details.previous;
+                const prev = details?.previous || details?.prev || details?.old;
                 if (!prev) throw new Error('No previous product data');
-                await pool.query(
+                await client.query(
                     `INSERT INTO products (id,workspace_id,name,category,quantity,unit,minStock,harvestDate,lastUpdated)
                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
                      ON CONFLICT (id) DO UPDATE SET
@@ -801,25 +1068,45 @@ app.post('/api/activity-logs/:id/rollback', async (req, res) => {
                         minStock = EXCLUDED.minStock,
                         harvestDate = EXCLUDED.harvestDate,
                         lastUpdated = EXCLUDED.lastUpdated`,
-                    [prev.id, workspaceId, prev.name, prev.category, prev.quantity, prev.unit, prev.minStock, prev.harvestDate, prev.lastUpdated]
+                    [
+                        prev.id,
+                        workspaceId,
+                        prev.name,
+                        prev.category,
+                        prev.quantity,
+                        prev.unit,
+                        prev.minStock ?? prev.minstock ?? 0,
+                        prev.harvestDate ?? prev.harvestdate ?? null,
+                        prev.lastUpdated ?? prev.lastupdated ?? new Date().toISOString(),
+                    ]
                 );
             } else if (log.action === 'update') {
-                const prev = details.previous;
+                const prev = details?.previous || details?.prev || details?.old;
                 if (!prev) throw new Error('No previous product data');
-                await pool.query(
+                await client.query(
                     `UPDATE products SET name=$1, category=$2, quantity=$3, unit=$4, minStock=$5, harvestDate=$6, lastUpdated=$7 WHERE id=$8 AND workspace_id=$9`,
-                    [prev.name, prev.category, prev.quantity, prev.unit, prev.minStock, prev.harvestDate, prev.lastUpdated, prev.id, workspaceId]
+                    [
+                        prev.name,
+                        prev.category,
+                        prev.quantity,
+                        prev.unit,
+                        prev.minStock ?? prev.minstock ?? 0,
+                        prev.harvestDate ?? prev.harvestdate ?? null,
+                        prev.lastUpdated ?? prev.lastupdated ?? new Date().toISOString(),
+                        prev.id,
+                        workspaceId,
+                    ]
                 );
             }
         };
 
         const rollbackSchedule = async () => {
             if (log.action === 'add') {
-                await pool.query('DELETE FROM schedules WHERE id = $1 AND workspace_id = $2', [itemId, workspaceId]);
+                await client.query('DELETE FROM schedules WHERE id = $1 AND workspace_id = $2', [itemId, workspaceId]);
             } else if (log.action === 'delete') {
-                const prev = details.previous;
+                const prev = details?.previous || details?.prev || details?.old;
                 if (!prev) throw new Error('No previous schedule data');
-                await pool.query(
+                await client.query(
                     `INSERT INTO schedules (id,workspace_id,cropName,category,plantingDate,harvestDate,area,estimatedYield,status,notes)
                      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                      ON CONFLICT (id) DO UPDATE SET
@@ -832,14 +1119,36 @@ app.post('/api/activity-logs/:id/rollback', async (req, res) => {
                         estimatedYield = EXCLUDED.estimatedYield,
                         status = EXCLUDED.status,
                         notes = EXCLUDED.notes`,
-                    [prev.id, workspaceId, prev.cropName, prev.category, prev.plantingDate, prev.harvestDate, prev.area, prev.estimatedYield, prev.status, prev.notes]
+                    [
+                        prev.id,
+                        workspaceId,
+                        prev.cropName ?? prev.cropname,
+                        prev.category,
+                        prev.plantingDate ?? prev.plantingdate,
+                        prev.harvestDate ?? prev.harvestdate,
+                        prev.area,
+                        prev.estimatedYield ?? prev.estimatedyield ?? null,
+                        prev.status,
+                        prev.notes,
+                    ]
                 );
             } else if (log.action === 'update') {
-                const prev = details.previous;
+                const prev = details?.previous || details?.prev || details?.old;
                 if (!prev) throw new Error('No previous schedule data');
-                await pool.query(
+                await client.query(
                     `UPDATE schedules SET cropName=$1, category=$2, plantingDate=$3, harvestDate=$4, area=$5, estimatedYield=$6, status=$7, notes=$8 WHERE id=$9 AND workspace_id=$10`,
-                    [prev.cropName, prev.category, prev.plantingDate, prev.harvestDate, prev.area, prev.estimatedYield, prev.status, prev.notes, prev.id, workspaceId]
+                    [
+                        prev.cropName ?? prev.cropname,
+                        prev.category,
+                        prev.plantingDate ?? prev.plantingdate,
+                        prev.harvestDate ?? prev.harvestdate,
+                        prev.area,
+                        prev.estimatedYield ?? prev.estimatedyield ?? null,
+                        prev.status,
+                        prev.notes,
+                        prev.id,
+                        workspaceId,
+                    ]
                 );
             }
         };
@@ -849,13 +1158,24 @@ app.post('/api/activity-logs/:id/rollback', async (req, res) => {
         } else if (log.type === 'schedule') {
             await rollbackSchedule();
         } else {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Cannot rollback this type' });
         }
 
-        res.json({ success: true });
+        // Remove rolled-back log so it disappears from the list and cannot be rolled back twice.
+        await client.query('DELETE FROM activity_logs WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+
+        await client.query('COMMIT');
+
+        res.json({ success: true, removedLogId: id });
     } catch (err) {
+        try {
+            await client.query('ROLLBACK');
+        } catch {}
         console.error('Rollback error:', err);
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useData } from "../context/data-context";
+import { useWorkspace } from "../context/workspace-context";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
@@ -61,6 +62,8 @@ const seasonInfo = [
 
 export function PlantingCalendar() {
   const { schedules, deleteSchedule } = useData();
+  const { getUserPermissions } = useWorkspace();
+  const permissions = getUserPermissions();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<PlantingSchedule | null>(
     null
@@ -68,7 +71,6 @@ export function PlantingCalendar() {
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(
     null
   );
-  const [userRole, setUserRole] = useState<"owner" | "employee">("owner");
 
   const getStatusBadge = (status: PlantingSchedule["status"]) => {
     switch (status) {
@@ -99,6 +101,7 @@ export function PlantingCalendar() {
         <Button
           onClick={() => setIsAddDialogOpen(true)}
           className="bg-green-600 hover:bg-green-700"
+          disabled={!permissions.canAdd}
         >
           <Plus className="h-4 w-4 mr-2" />
           เพิ่มแผนการปลูก
@@ -155,7 +158,7 @@ export function PlantingCalendar() {
               getStatusBadge={getStatusBadge}
               onEdit={setEditingSchedule}
               onDelete={setDeletingScheduleId}
-              userRole={userRole}
+              canEdit={permissions.canEdit}
             />
           </TabsContent>
 
@@ -165,7 +168,7 @@ export function PlantingCalendar() {
               getStatusBadge={getStatusBadge}
               onEdit={setEditingSchedule}
               onDelete={setDeletingScheduleId}
-              userRole={userRole}
+              canEdit={permissions.canEdit}
             />
           </TabsContent>
 
@@ -175,7 +178,7 @@ export function PlantingCalendar() {
               getStatusBadge={getStatusBadge}
               onEdit={setEditingSchedule}
               onDelete={setDeletingScheduleId}
-              userRole={userRole}
+              canEdit={permissions.canEdit}
             />
           </TabsContent>
 
@@ -185,7 +188,7 @@ export function PlantingCalendar() {
               getStatusBadge={getStatusBadge}
               onEdit={setEditingSchedule}
               onDelete={setDeletingScheduleId}
-              userRole={userRole}
+              canEdit={permissions.canEdit}
             />
           </TabsContent>
         </Tabs>
@@ -243,13 +246,13 @@ function ScheduleTable({
   getStatusBadge,
   onEdit,
   onDelete,
-  userRole,
+  canEdit,
 }: {
   schedules: PlantingSchedule[];
   getStatusBadge: (status: PlantingSchedule["status"]) => JSX.Element;
   onEdit: (schedule: PlantingSchedule) => void;
   onDelete: (id: string) => void;
-  userRole: "owner" | "employee";
+  canEdit: boolean;
 }) {
   if (schedules.length === 0) {
     return (
@@ -306,7 +309,7 @@ function ScheduleTable({
               </TableCell>
               <TableCell>
                 <div className="flex items-center justify-center gap-2">
-                  {userRole === "owner" && (
+                  {canEdit && (
                     <>
                       <Button
                         variant="ghost"
@@ -324,7 +327,7 @@ function ScheduleTable({
                       </Button>
                     </>
                   )}
-                  {userRole === "employee" && (
+                  {!canEdit && (
                     <Badge variant="secondary" className="text-xs">
                       อ่านอย่างเดียว
                     </Badge>

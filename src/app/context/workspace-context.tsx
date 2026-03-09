@@ -16,7 +16,36 @@ export interface WorkspaceMember {
   name: string;
   email: string;
   role: "owner" | "employee";
+  canView: boolean;
+  canAdd: boolean;
+  canEdit: boolean;
+  canManagePermissions: boolean;
+  viewDashboard: boolean;
+  viewInventory: boolean;
+  viewSummary: boolean;
+  viewCalendar: boolean;
+  viewAnalysis: boolean;
+  viewPriceComparison: boolean;
+  viewRecommendations: boolean;
+  viewMembers: boolean;
+  viewActivity: boolean;
   joinedAt: Date;
+}
+
+export interface WorkspacePermissions {
+  canView: boolean;
+  canAdd: boolean;
+  canEdit: boolean;
+  canManagePermissions: boolean;
+  viewDashboard: boolean;
+  viewInventory: boolean;
+  viewSummary: boolean;
+  viewCalendar: boolean;
+  viewAnalysis: boolean;
+  viewPriceComparison: boolean;
+  viewRecommendations: boolean;
+  viewMembers: boolean;
+  viewActivity: boolean;
 }
 
 interface WorkspaceContextType {
@@ -28,6 +57,12 @@ interface WorkspaceContextType {
   deleteWorkspace: (workspaceId: string) => Promise<boolean>;
   inviteToWorkspace: (workspaceId: string, email: string) => void;
   getUserRole: () => "owner" | "employee" | null;
+  getUserPermissions: () => WorkspacePermissions;
+  updateMemberPermissions: (
+    workspaceId: string,
+    memberId: string,
+    permissions: WorkspacePermissions
+  ) => Promise<boolean>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -50,6 +85,55 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       name: m.name,
       email: m.email,
       role: m.role,
+      canView: m.role === "owner" ? true : Boolean(m.canView ?? m.can_view ?? true),
+      canAdd: m.role === "owner" ? true : Boolean(m.canAdd ?? m.can_add ?? false),
+      canEdit: m.role === "owner" ? true : Boolean(m.canEdit ?? m.can_edit ?? false),
+      canManagePermissions:
+        m.role === "owner"
+          ? true
+          : Boolean(
+              m.canManagePermissions ?? m.can_manage_permissions ?? false
+            ),
+      viewDashboard:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewDashboard ?? m.view_dashboard ?? true),
+      viewInventory:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewInventory ?? m.view_inventory ?? true),
+      viewSummary:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewSummary ?? m.view_summary ?? true),
+      viewCalendar:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewCalendar ?? m.view_calendar ?? true),
+      viewAnalysis:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewAnalysis ?? m.view_analysis ?? true),
+      viewPriceComparison:
+        m.role === "owner"
+          ? true
+          : Boolean(
+              m.viewPriceComparison ?? m.view_price_comparison ?? true
+            ),
+      viewRecommendations:
+        m.role === "owner"
+          ? true
+          : Boolean(
+              m.viewRecommendations ?? m.view_recommendations ?? true
+            ),
+      viewMembers:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewMembers ?? m.view_members ?? true),
+      viewActivity:
+        m.role === "owner"
+          ? true
+          : Boolean(m.viewActivity ?? m.view_activity ?? true),
       joinedAt: new Date(m.joinedAt ?? m.joined_at),
     })),
   });
@@ -187,6 +271,140 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return member?.role || null;
   };
 
+  const getUserPermissions = (): WorkspacePermissions => {
+    if (!user || !currentWorkspace) {
+      return {
+        canView: false,
+        canAdd: false,
+        canEdit: false,
+        canManagePermissions: false,
+        viewDashboard: false,
+        viewInventory: false,
+        viewSummary: false,
+        viewCalendar: false,
+        viewAnalysis: false,
+        viewPriceComparison: false,
+        viewRecommendations: false,
+        viewMembers: false,
+        viewActivity: false,
+      };
+    }
+
+    const member = currentWorkspace.members.find((m) => m.id === user.id);
+    if (!member) {
+      return {
+        canView: false,
+        canAdd: false,
+        canEdit: false,
+        canManagePermissions: false,
+        viewDashboard: false,
+        viewInventory: false,
+        viewSummary: false,
+        viewCalendar: false,
+        viewAnalysis: false,
+        viewPriceComparison: false,
+        viewRecommendations: false,
+        viewMembers: false,
+        viewActivity: false,
+      };
+    }
+
+    if (member.role === "owner") {
+      return {
+        canView: true,
+        canAdd: true,
+        canEdit: true,
+        canManagePermissions: true,
+        viewDashboard: true,
+        viewInventory: true,
+        viewSummary: true,
+        viewCalendar: true,
+        viewAnalysis: true,
+        viewPriceComparison: true,
+        viewRecommendations: true,
+        viewMembers: true,
+        viewActivity: true,
+      };
+    }
+
+    return {
+      canView: member.canView,
+      canAdd: member.canAdd,
+      canEdit: member.canEdit,
+      canManagePermissions: member.canManagePermissions,
+      viewDashboard: member.viewDashboard,
+      viewInventory: member.viewInventory,
+      viewSummary: member.viewSummary,
+      viewCalendar: member.viewCalendar,
+      viewAnalysis: member.viewAnalysis,
+      viewPriceComparison: member.viewPriceComparison,
+      viewRecommendations: member.viewRecommendations,
+      viewMembers: member.viewMembers,
+      viewActivity: member.viewActivity,
+    };
+  };
+
+  const updateMemberPermissions = async (
+    workspaceId: string,
+    memberId: string,
+    permissions: WorkspacePermissions
+  ): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    const res = await fetch(
+      `${API_BASE}/api/workspaces/${encodeURIComponent(
+        workspaceId
+      )}/members/${encodeURIComponent(memberId)}/permissions`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requesterUserId: user.id,
+          ...permissions,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      return false;
+    }
+
+    const nextWorkspaces = workspaces.map((ws) => {
+      if (ws.id !== workspaceId) return ws;
+      return {
+        ...ws,
+        members: ws.members.map((member) => {
+          if (member.id !== memberId) return member;
+          if (member.role === "owner") return member;
+          return {
+            ...member,
+            canView: permissions.canView,
+            canAdd: permissions.canAdd,
+            canEdit: permissions.canEdit,
+            canManagePermissions: permissions.canManagePermissions,
+            viewDashboard: permissions.viewDashboard,
+            viewInventory: permissions.viewInventory,
+            viewSummary: permissions.viewSummary,
+            viewCalendar: permissions.viewCalendar,
+            viewAnalysis: permissions.viewAnalysis,
+            viewPriceComparison: permissions.viewPriceComparison,
+            viewRecommendations: permissions.viewRecommendations,
+            viewMembers: permissions.viewMembers,
+            viewActivity: permissions.viewActivity,
+          };
+        }),
+      };
+    });
+
+    setWorkspaces(nextWorkspaces);
+    if (currentWorkspace?.id === workspaceId) {
+      const updatedCurrent = nextWorkspaces.find((ws) => ws.id === workspaceId) || null;
+      setCurrentWorkspace(updatedCurrent);
+    }
+
+    return true;
+  };
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -198,6 +416,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         deleteWorkspace,
         inviteToWorkspace,
         getUserRole,
+        getUserPermissions,
+        updateMemberPermissions,
       }}
     >
       {children}

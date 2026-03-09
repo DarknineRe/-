@@ -1,4 +1,5 @@
 import { useData } from "../context/data-context";
+import { useWorkspace } from "../context/workspace-context";
 import { Card } from "../components/ui/card";
 import {
   Table,
@@ -49,6 +50,8 @@ function getDescription(action: string, type: string, itemName: string): string 
 
 export function ActivityLog() {
   const { activityLogs, rollbackActivity } = useData();
+  const { getUserPermissions } = useWorkspace();
+  const permissions = getUserPermissions();
 
   const rollback = async (log: any) => {
     if (confirm('ต้องการย้อนกลับการกระทำนี้หรือไม่?')) {
@@ -242,7 +245,7 @@ export function ActivityLog() {
                           let enabled = false;
                           try {
                             const d = JSON.parse(log.details);
-                            enabled = !!d?.itemId;
+                            enabled = !!(d?.itemId || d?.item_id) && permissions.canEdit;
                           } catch {}
                           return (
                             <button

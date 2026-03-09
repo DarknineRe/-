@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useData } from "../context/data-context";
+import { useWorkspace } from "../context/workspace-context";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -35,26 +36,34 @@ import {
 } from "../components/ui/alert-dialog";
 
 export function Inventory() {
-  const { products, updateProduct, deleteProduct, userRole } = useData();
+  const { products, updateProduct, deleteProduct } = useData();
+  const { getUserPermissions } = useWorkspace();
+  const permissions = getUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("ทั้งหมด");
+  const [workspaceMode, setWorkspaceMode] = useState<"category" | "product">("category");
+  const [workspaceFilter, setWorkspaceFilter] = useState<string>("ทั้งหมด");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   // Get unique categories
   const categories = ["ทั้งหมด", ...new Set(products.map((p) => p.category))];
+  const productNames = ["ทั้งหมด", ...new Set(products.map((p) => p.name))];
 
-  const workspaceItems = categories.map((category) => {
-    const categoryProducts =
-      category === "ทั้งหมด"
+  const workspaceOptions = workspaceMode === "category" ? categories : productNames;
+
+  const workspaceItems = workspaceOptions.map((option) => {
+    const scopedProducts =
+      option === "ทั้งหมด"
         ? products
-        : products.filter((product) => product.category === category);
+        : workspaceMode === "category"
+        ? products.filter((product) => product.category === option)
+        : products.filter((product) => product.name === option);
 
     return {
-      name: category,
-      count: categoryProducts.length,
-      totalQuantity: categoryProducts.reduce(
+      name: option,
+      count: scopedProducts.length,
+      totalQuantity: scopedProducts.reduce(
         (sum, product) => sum + product.quantity,
         0
       ),
@@ -66,9 +75,13 @@ export function Inventory() {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      categoryFilter === "ทั้งหมด" || product.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesWorkspace =
+      workspaceFilter === "ทั้งหมด"
+        ? true
+        : workspaceMode === "category"
+        ? product.category === workspaceFilter
+        : product.name === workspaceFilter;
+    return matchesSearch && matchesWorkspace;
   });
 
   const getStockStatus = (product: Product) => {
@@ -88,6 +101,7 @@ export function Inventory() {
         <Button
           onClick={() => setIsAddDialogOpen(true)}
           className="bg-green-600 hover:bg-green-700"
+          disabled={!permissions.canAdd}
         >
           <Plus className="h-4 w-4 mr-2" />
           เพิ่มสินค้าใหม่
@@ -100,25 +114,42 @@ export function Inventory() {
           <h3 className="text-lg font-semibold text-gray-900">พื้นที่ทำงานสินค้า</h3>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          เลือกบับเบิลเพื่อเปิดดูสินค้าตามหมวดหมู่ พร้อมจำนวนรายการและปริมาณรวม
+          เลือกตามหมวดหมู่หรือชื่อสินค้า แล้วกดบับเบิลเพื่อเปิดดูรายการ
         </p>
+
+        <div className="mb-4">
+          <Select
+            value={workspaceMode}
+            onValueChange={(value: "category" | "product") => {
+              setWorkspaceMode(value);
+              setWorkspaceFilter("ทั้งหมด");
+            }}
+          >
+            <SelectTrigger className="w-full md:w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="category">ตามหมวดหมู่</SelectItem>
+              <SelectItem value="product">ตามชื่อสินค้า</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex flex-wrap gap-3">
           {workspaceItems.map((workspace) => {
-            const isActive = categoryFilter === workspace.name;
+            const isActive = workspaceFilter === workspace.name;
 
             return (
               <button
                 key={workspace.name}
                 type="button"
-                onClick={() => setCategoryFilter(workspace.name)}
+                onClick={() => setWorkspaceFilter(workspace.name)}
                 className={`rounded-full border px-4 py-3 text-left transition-all min-w-[180px] ${
                   isActive
                     ? "border-green-600 bg-green-600 text-white shadow"
                     : "border-green-200 bg-green-50 text-gray-800 hover:border-green-400 hover:bg-green-100"
                 }`}
               >
-                <p className="text-xs opacity-80">Workspace</p>
                 <p className="font-semibold leading-tight">{workspace.name}</p>
                 <p className="text-xs mt-1">
                   {workspace.count.toLocaleString()} รายการ • {workspace.totalQuantity.toLocaleString()} หน่วย
@@ -141,14 +172,14 @@ export function Inventory() {
               className="pl-10"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={workspaceFilter} onValueChange={setWorkspaceFilter}>
             <SelectTrigger className="w-full md:w-[200px]">
-              <SelectValue placeholder="เลือกหมวดหมู่" />
+              <SelectValue placeholder="เลือกรายการ" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
+              {workspaceOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -205,7 +236,7 @@ export function Inventory() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
-                          {userRole === "owner" && (
+                          {permissions.canEdit && (
                             <>
                               <Button
                                 variant="ghost"
@@ -223,7 +254,7 @@ export function Inventory() {
                               </Button>
                             </>
                           )}
-                          {userRole === "employee" && (
+                          {!permissions.canEdit && (
                             <Badge variant="secondary" className="text-xs">
                               อ่านอย่างเดียว
                             </Badge>

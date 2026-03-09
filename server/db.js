@@ -110,9 +110,129 @@ async function initializeDatabase() {
                 workspace_id VARCHAR(255) NOT NULL,
                 user_id VARCHAR(255) NOT NULL,
                 role VARCHAR(50) NOT NULL DEFAULT 'employee',
+                can_view BOOLEAN NOT NULL DEFAULT TRUE,
+                can_add BOOLEAN NOT NULL DEFAULT FALSE,
+                can_edit BOOLEAN NOT NULL DEFAULT FALSE,
+                can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
+                view_dashboard BOOLEAN NOT NULL DEFAULT TRUE,
+                view_inventory BOOLEAN NOT NULL DEFAULT TRUE,
+                view_summary BOOLEAN NOT NULL DEFAULT TRUE,
+                view_calendar BOOLEAN NOT NULL DEFAULT TRUE,
+                view_analysis BOOLEAN NOT NULL DEFAULT TRUE,
+                view_price_comparison BOOLEAN NOT NULL DEFAULT TRUE,
+                view_recommendations BOOLEAN NOT NULL DEFAULT TRUE,
+                view_members BOOLEAN NOT NULL DEFAULT TRUE,
+                view_activity BOOLEAN NOT NULL DEFAULT TRUE,
                 joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (workspace_id, user_id)
             );
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_view BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_add BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_edit BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS can_manage_permissions BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_dashboard BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_inventory BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_summary BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_calendar BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_analysis BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_price_comparison BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_recommendations BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_members BOOLEAN;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS view_activity BOOLEAN;
+        `);
+        await client.query(`
+            UPDATE workspace_members
+            SET can_view = COALESCE(can_view, TRUE),
+                can_add = COALESCE(can_add, CASE WHEN role = 'owner' THEN TRUE ELSE FALSE END),
+                can_edit = COALESCE(can_edit, CASE WHEN role = 'owner' THEN TRUE ELSE FALSE END),
+                can_manage_permissions = COALESCE(can_manage_permissions, CASE WHEN role = 'owner' THEN TRUE ELSE FALSE END),
+                view_dashboard = COALESCE(view_dashboard, TRUE),
+                view_inventory = COALESCE(view_inventory, TRUE),
+                view_summary = COALESCE(view_summary, TRUE),
+                view_calendar = COALESCE(view_calendar, TRUE),
+                view_analysis = COALESCE(view_analysis, TRUE),
+                view_price_comparison = COALESCE(view_price_comparison, TRUE),
+                view_recommendations = COALESCE(view_recommendations, TRUE),
+                view_members = COALESCE(view_members, TRUE),
+                view_activity = COALESCE(view_activity, TRUE)
+            WHERE can_view IS NULL
+               OR can_add IS NULL
+               OR can_edit IS NULL
+               OR can_manage_permissions IS NULL
+               OR view_dashboard IS NULL
+               OR view_inventory IS NULL
+               OR view_summary IS NULL
+               OR view_calendar IS NULL
+               OR view_analysis IS NULL
+               OR view_price_comparison IS NULL
+               OR view_recommendations IS NULL
+               OR view_members IS NULL
+               OR view_activity IS NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN can_view SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN can_add SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN can_edit SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN can_manage_permissions SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_dashboard SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_inventory SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_summary SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_calendar SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_analysis SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_price_comparison SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_recommendations SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_members SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE workspace_members ALTER COLUMN view_activity SET NOT NULL;
         `);
 
         await client.query(`

@@ -73,13 +73,48 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, getUserRole, getUserPermissions } = useWorkspace();
   const [products, setProducts] = useState<Product[]>([]);
   const [schedules, setSchedules] = useState<PlantingSchedule[]>([]);
   const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [userRole, setUserRole] = useState<"owner" | "employee">("owner");
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const role = getUserRole();
+    if (role) {
+      setUserRole(role);
+    }
+  }, [currentWorkspace?.id, getUserRole]);
+
+  const ensureCanAdd = () => {
+    const permissions = getUserPermissions();
+    if (!permissions.canView) {
+      const error = new Error("คุณไม่มีสิทธิ์เข้าถึงข้อมูลใน Workspace นี้");
+      toast.error(error.message);
+      throw error;
+    }
+    if (!permissions.canAdd) {
+      const error = new Error("คุณไม่มีสิทธิ์เพิ่มข้อมูล");
+      toast.error(error.message);
+      throw error;
+    }
+  };
+
+  const ensureCanEdit = () => {
+    const permissions = getUserPermissions();
+    if (!permissions.canView) {
+      const error = new Error("คุณไม่มีสิทธิ์เข้าถึงข้อมูลใน Workspace นี้");
+      toast.error(error.message);
+      throw error;
+    }
+    if (!permissions.canEdit) {
+      const error = new Error("คุณไม่มีสิทธิ์แก้ไขหรือลบข้อมูล");
+      toast.error(error.message);
+      throw error;
+    }
+  };
 
   // utility to normalize backend rows to client models
   const normalizeProduct = (row: any) => ({
@@ -114,6 +149,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // helper to load all data; used on mount and after rollbacks
   const loadData = async () => {
     if (!currentWorkspace?.id) {
+      setProducts([]);
+      setSchedules([]);
+      setPriceHistory([]);
+      setActivityLogs([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const permissions = getUserPermissions();
+    if (!permissions.canView) {
       setProducts([]);
       setSchedules([]);
       setPriceHistory([]);
@@ -161,7 +206,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch initial data on mount
   useEffect(() => {
     loadData();
-  }, [currentWorkspace?.id]);
+  }, [currentWorkspace]);
 
   const addActivityLog = async (log: Omit<ActivityLog, "id">) => {
     try {
@@ -185,6 +230,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const rollbackActivity = async (log: ActivityLog) => {
     try {
       if (!currentWorkspace?.id) return;
+      ensureCanEdit();
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/activity-logs/${log.id}/rollback?${workspaceQuery}`, {
         method: 'POST'
@@ -207,6 +253,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanAdd();
       const payload = {
         workspaceId: currentWorkspace.id,
         name: product.name,
@@ -262,6 +309,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanEdit();
       const oldProduct = products.find(p => p.id === updatedProduct.id);
       const payload = { ...updatedProduct, workspaceId: currentWorkspace.id, lastUpdated: new Date().toISOString() };
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
@@ -302,6 +350,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanEdit();
       const product = products.find(p => p.id === id);
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/products/${id}?${workspaceQuery}`, { method: 'DELETE' });
@@ -336,6 +385,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanAdd();
       const res = await fetch(`${API_BASE}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -372,6 +422,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanEdit();
       const oldSchedule = schedules.find(s => s.id === updatedSchedule.id);
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/schedules/${updatedSchedule.id}?${workspaceQuery}`, {
@@ -411,6 +462,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      ensureCanEdit();
       const schedule = schedules.find(s => s.id === id);
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/schedules/${id}?${workspaceQuery}`, { method: 'DELETE' });

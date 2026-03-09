@@ -24,24 +24,29 @@ import {
 } from "./ui/select";
 
 const navItems = [
-  { path: "/", label: "ภาพรวม", icon: BarChart3 },
-  { path: "/inventory", label: "จัดการสต็อก", icon: Package },
-  { path: "/summary", label: "สรุปสต็อก", icon: BarChart2 },
-  { path: "/calendar", label: "ปฏิทินการปลูก", icon: Calendar },
-  { path: "/analysis", label: "วิเคราะห์ราคา", icon: TrendingUp },
-  { path: "/price-comparison", label: "เปรียบเทียบราคา", icon: DollarSign },
-  { path: "/recommendations", label: "คำแนะนำ", icon: Lightbulb },
-  { path: "/members", label: "สมาชิก", icon: Users },
-  { path: "/activity", label: "ประวัติการเปลี่ยนแปลง", icon: ClipboardList },
+  { path: "/", label: "ภาพรวม", icon: BarChart3, permissionKey: "viewDashboard" as const },
+  { path: "/inventory", label: "จัดการสต็อก", icon: Package, permissionKey: "viewInventory" as const },
+  { path: "/summary", label: "สรุปสต็อก", icon: BarChart2, permissionKey: "viewSummary" as const },
+  { path: "/calendar", label: "ปฏิทินการปลูก", icon: Calendar, permissionKey: "viewCalendar" as const },
+  { path: "/analysis", label: "วิเคราะห์ราคา", icon: TrendingUp, permissionKey: "viewAnalysis" as const },
+  { path: "/price-comparison", label: "เปรียบเทียบราคา", icon: DollarSign, permissionKey: "viewPriceComparison" as const },
+  { path: "/recommendations", label: "คำแนะนำ", icon: Lightbulb, permissionKey: "viewRecommendations" as const },
+  { path: "/members", label: "สมาชิก", icon: Users, permissionKey: "viewMembers" as const },
+  { path: "/activity", label: "ประวัติการเปลี่ยนแปลง", icon: ClipboardList, permissionKey: "viewActivity" as const },
 ];
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const { currentWorkspace, getUserRole } = useWorkspace();
+  const { currentWorkspace, getUserRole, getUserPermissions } = useWorkspace();
   const { user, logout, isAuthenticated } = useAuth();
   const userRole = getUserRole();
+  const permissions = getUserPermissions();
+
+  const accessibleNavItems = navItems.filter(
+    (item) => permissions.canView && permissions[item.permissionKey]
+  );
 
   // Redirect if not authenticated or no workspace
   useEffect(() => {
@@ -49,8 +54,15 @@ export function Layout() {
       navigate("/login");
     } else if (!currentWorkspace) {
       navigate("/hub");
+    } else if (accessibleNavItems.length > 0) {
+      const canAccessCurrent = accessibleNavItems.some(
+        (item) => item.path === location.pathname
+      );
+      if (!canAccessCurrent) {
+        navigate(accessibleNavItems[0].path);
+      }
     }
-  }, [isAuthenticated, currentWorkspace, navigate]);
+  }, [isAuthenticated, currentWorkspace, accessibleNavItems, location.pathname, navigate]);
 
   const handleLogout = () => {
     logout();
@@ -76,7 +88,7 @@ export function Layout() {
 
   const NavLinks = () => (
     <>
-      {navItems.map((item) => {
+      {accessibleNavItems.map((item) => {
         const Icon = item.icon;
         const isActive = location.pathname === item.path;
         return (
