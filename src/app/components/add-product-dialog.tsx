@@ -46,6 +46,7 @@ export function AddProductDialog({
     name: "",
     category: "",
     quantity: "",
+    minStock: "",
     unit: "",
     harvestDate: "",
   });
@@ -69,6 +70,11 @@ export function AddProductDialog({
       return;
     }
 
+    if (Number(formData.minStock || 0) < 0) {
+      toast.error("จำนวนขั้นต่ำต้องไม่ติดลบ");
+      return;
+    }
+
     if (!formData.unit) {
       toast.error("กรุณาเลือกหน่วย");
       return;
@@ -80,7 +86,7 @@ export function AddProductDialog({
         category: formData.category,
         quantity: Number(formData.quantity),
         unit: formData.unit,
-        minStock: 0,
+        minStock: Number(formData.minStock || 0),
         harvestDate: formData.harvestDate || undefined,
       });
 
@@ -89,6 +95,7 @@ export function AddProductDialog({
         name: "",
         category: "",
         quantity: "",
+        minStock: "",
         unit: "",
         harvestDate: "",
       });
@@ -154,6 +161,20 @@ export function AddProductDialog({
                   setFormData({ ...formData, quantity: e.target.value })
                 }
                 placeholder="0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="minStock">แจ้งเตือนเมื่อเหลือต่ำกว่า/เท่ากับ</Label>
+              <Input
+                id="minStock"
+                type="number"
+                min="0"
+                value={formData.minStock}
+                onChange={(e) =>
+                  setFormData({ ...formData, minStock: e.target.value })
+                }
+                placeholder="เช่น 10"
               />
             </div>
 

@@ -32,6 +32,9 @@ export function InventorySummary() {
   // คำนวณสถิติ
   const totalProducts = products.length;
   const totalQuantity = products.reduce((sum, p) => sum + p.quantity, 0);
+  const lowStockProducts = products
+    .filter((product) => product.minStock > 0 && product.quantity > 0 && product.quantity <= product.minStock)
+    .sort((a, b) => a.quantity - b.quantity);
 
   // จัดกลุ่มตามหมวดหมู่
   const categoryData = products.reduce((acc, product) => {
@@ -71,7 +74,7 @@ export function InventorySummary() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -109,6 +112,19 @@ export function InventorySummary() {
             </div>
             <div className="p-3 bg-purple-100 rounded-full">
               <Layers className="h-6 w-6 text-purple-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">สินค้าใกล้หมด</p>
+              <p className="text-3xl font-bold text-amber-600">{lowStockProducts.length}</p>
+              <p className="text-xs text-gray-500 mt-1">รายการ</p>
+            </div>
+            <div className="p-3 bg-amber-100 rounded-full">
+              <TrendingUp className="h-6 w-6 text-amber-600" />
             </div>
           </div>
         </Card>
@@ -249,6 +265,43 @@ export function InventorySummary() {
             </TableBody>
           </Table>
         </div>
+      </Card>
+
+      {/* Low Stock Products */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          แจ้งเตือนสินค้าใกล้หมด
+        </h3>
+        {lowStockProducts.length === 0 ? (
+          <p className="text-gray-500 text-center py-6">ยังไม่มีสินค้าใกล้หมด</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ชื่อสินค้า</TableHead>
+                  <TableHead>หมวดหมู่</TableHead>
+                  <TableHead className="text-right">คงเหลือ</TableHead>
+                  <TableHead className="text-right">ขั้นต่ำ</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lowStockProducts.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell>{product.category}</TableCell>
+                    <TableCell className="text-right text-amber-700 font-semibold">
+                      {product.quantity.toLocaleString()} {product.unit}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {product.minStock.toLocaleString()} {product.unit}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </Card>
     </div>
   );

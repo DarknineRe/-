@@ -48,6 +48,7 @@ export function EditProductDialog({
     name: product.name,
     category: product.category,
     quantity: product.quantity.toString(),
+    minStock: (product.minStock ?? 0).toString(),
     unit: product.unit,
     harvestDate: product.harvestDate
       ? new Date(product.harvestDate).toISOString().split("T")[0]
@@ -59,6 +60,7 @@ export function EditProductDialog({
       name: product.name,
       category: product.category,
       quantity: product.quantity.toString(),
+      minStock: (product.minStock ?? 0).toString(),
       unit: product.unit,
       harvestDate: product.harvestDate
         ? new Date(product.harvestDate).toISOString().split("T")[0]
@@ -75,7 +77,7 @@ export function EditProductDialog({
       category: formData.category,
       quantity: Number(formData.quantity),
       unit: formData.unit,
-      minStock: product.minStock,
+      minStock: Number(formData.minStock || 0),
       harvestDate: formData.harvestDate ? new Date(formData.harvestDate) : undefined,
     });
 
@@ -138,6 +140,20 @@ export function EditProductDialog({
                   setFormData({ ...formData, quantity: e.target.value })
                 }
                 placeholder="0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-minStock">แจ้งเตือนเมื่อเหลือต่ำกว่า/เท่ากับ</Label>
+              <Input
+                id="edit-minStock"
+                type="number"
+                min="0"
+                value={formData.minStock}
+                onChange={(e) =>
+                  setFormData({ ...formData, minStock: e.target.value })
+                }
+                placeholder="เช่น 10"
               />
             </div>
 

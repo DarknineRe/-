@@ -25,6 +25,9 @@ export function Dashboard() {
 
   const activePlantings = schedules.filter((s) => s.status === "planted").length;
   const plannedPlantings = schedules.filter((s) => s.status === "planned").length;
+  const lowStockProducts = products
+    .filter((product) => product.minStock > 0 && product.quantity > 0 && product.quantity <= product.minStock)
+    .sort((a, b) => a.quantity - b.quantity);
 
   const stats = [
     {
@@ -144,6 +147,34 @@ export function Dashboard() {
 
       {/* Additional Info Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Low Stock Alert */}
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Package className="h-5 w-5 text-amber-600" />
+            <h3 className="text-lg font-semibold">แจ้งเตือนสินค้าใกล้หมด</h3>
+          </div>
+          {lowStockProducts.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">ยังไม่มีสินค้าใกล้หมด</p>
+          ) : (
+            <div className="space-y-3">
+              {lowStockProducts.slice(0, 6).map((product) => (
+                <div
+                  key={product.id}
+                  className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{product.name}</p>
+                    <p className="text-sm text-amber-700">
+                      คงเหลือ {product.quantity.toLocaleString()} {product.unit} (ขั้นต่ำ {product.minStock.toLocaleString()} {product.unit})
+                    </p>
+                  </div>
+                  <Badge className="bg-amber-600">ใกล้หมด</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Upcoming Harvests */}
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">

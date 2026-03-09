@@ -58,6 +58,79 @@ function fetchMarketPrice(productId, fromDate, toDate) {
             };
         };
 
+        const decodeHtmlEntities = (text) => {
+            if (!text) return '';
+            return String(text)
+                .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => {
+                    try {
+                        return String.fromCodePoint(parseInt(hex, 16));
+                    } catch {
+                        return '';
+                    }
+                })
+                .replace(/&#([0-9]+);/g, (_, num) => {
+                    try {
+                        return String.fromCodePoint(parseInt(num, 10));
+                    } catch {
+                        return '';
+                    }
+                });
+        };
+
+        const parseFromHtml = (html) => {
+            if (!html || typeof html !== 'string') return null;
+
+            const normalized = html.replace(/\r?\n/g, ' ');
+
+            // Try parsing from the daily detail table (most reliable values shown on fallback page)
+            const detailMatch = normalized.match(
+                /<table class="table table-bordered">[\s\S]*?<tr>\s*<td>[^<]+<\/td>\s*<td[^>]*>\s*([0-9.,]+)\s*<\/td>\s*<td[^>]*>\s*([0-9.,]+)\s*<\/td>/i
+            );
+
+            let minPrice = null;
+            let maxPrice = null;
+            let avgPrice = null;
+
+            if (detailMatch) {
+                minPrice = parseAsNumber(detailMatch[1]);
+                maxPrice = parseAsNumber(detailMatch[2]);
+                if (minPrice !== null && maxPrice !== null) {
+                    avgPrice = (minPrice + maxPrice) / 2;
+                }
+            }
+
+            // Parse displayed product name from the row immediately after the matching product code row.
+            const escapedProductId = String(productId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nameRegex = new RegExp(
+                `<td>\\s*${escapedProductId}\\s*<\\/td>[\\s\\S]*?<\\/tr>\\s*<tr>\\s*<td[\\s\\S]*?<\\/td>\\s*<td>\\s*([\\s\\S]*?)\\s*<\\/td>\\s*<\\/tr>`,
+                'i'
+            );
+            const productNameMatch = normalized.match(nameRegex);
+            const decodedName = productNameMatch
+                ? decodeHtmlEntities(productNameMatch[1].replace(/<[^>]*>/g, '')).trim()
+                : '';
+
+            if (avgPrice === null && minPrice === null && maxPrice === null) {
+                return null;
+            }
+
+            // Keep anti-placeholder protection
+            if ((!decodedName || decodedName.toLowerCase() === 'unknown') && minPrice === avgPrice && maxPrice === avgPrice) {
+                return null;
+            }
+
+            return {
+                productId,
+                productName: decodedName || '',
+                minPrice,
+                maxPrice,
+                avgPrice,
+                fromDate,
+                toDate,
+                fetchedAt: new Date().toISOString()
+            };
+        };
+
         const tryFetch = (index) => {
             if (index >= urls.length) {
                 return reject(new Error('Failed to fetch market price from all configured MOC endpoints'));
@@ -90,8 +163,7 @@ function fetchMarketPrice(productId, fromDate, toDate) {
                             try {
                                 result = parseFromJson(JSON.parse(data));
                             } catch {
-                                // Do not parse raw HTML pages; they can produce incorrect prices.
-                                result = null;
+                                result = parseFromHtml(data);
                             }
 
                             if (!result) {
