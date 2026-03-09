@@ -926,7 +926,9 @@ app.get('/api/price-history', async (req, res) => {
         const marketPriceSql = `
             SELECT to_char(date, 'YYYY-MM') AS period,
                    product_name,
-                   AVG(avg_price)::float8 AS avg_price
+                                     AVG(avg_price)::float8 AS avg_price,
+                                     AVG(min_price)::float8 AS min_price,
+                                     AVG(max_price)::float8 AS max_price
             FROM market_prices
             WHERE workspace_id = $1
               AND product_name IS NOT NULL AND product_name <> ''
@@ -948,7 +950,14 @@ app.get('/api/price-history', async (req, res) => {
                     grouped.set(row.period, { date: row.period });
                 }
                 const target = grouped.get(row.period);
-                target[row.product_name] = Number(row.avg_price);
+                const avgPrice = Number(row.avg_price);
+                const minPrice = row.min_price === null ? avgPrice : Number(row.min_price);
+                const maxPrice = row.max_price === null ? avgPrice : Number(row.max_price);
+
+                target[row.product_name] = avgPrice;
+                // hidden keys for market min/max used by frontend analytics
+                target[`__min__${row.product_name}`] = minPrice;
+                target[`__max__${row.product_name}`] = maxPrice;
             }
 
             return res.json(Array.from(grouped.values()));

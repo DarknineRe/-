@@ -36,7 +36,9 @@ export function PriceAnalysis() {
   // Get available crops from price history
   const availableCrops = useMemo(() => {
     if (priceHistory.length > 0) {
-      return Object.keys(priceHistory[0]).filter((key) => key !== "date");
+      return Object.keys(priceHistory[0]).filter(
+        (key) => key !== "date" && !key.startsWith("__")
+      );
     }
     return [];
   }, [priceHistory]);
@@ -61,8 +63,24 @@ export function PriceAnalysis() {
     const currentPrice = prices[prices.length - 1];
     const previousPrice = prices.length > 1 ? prices[prices.length - 2] : currentPrice;
     const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
-    const maxPrice = Math.max(...prices);
-    const minPrice = Math.min(...prices);
+    const computedMaxPrice = Math.max(...prices);
+    const computedMinPrice = Math.min(...prices);
+
+    const marketMinSeries = priceHistory
+      .map((h) => h[`__min__${cropName}`] as number)
+      .filter((p) => typeof p === "number" && !isNaN(p));
+    const marketMaxSeries = priceHistory
+      .map((h) => h[`__max__${cropName}`] as number)
+      .filter((p) => typeof p === "number" && !isNaN(p));
+
+    const minPrice =
+      marketMinSeries.length > 0
+        ? Math.min(...marketMinSeries)
+        : computedMinPrice;
+    const maxPrice =
+      marketMaxSeries.length > 0
+        ? Math.max(...marketMaxSeries)
+        : computedMaxPrice;
     const priceChange = currentPrice - previousPrice;
     const priceChangePercent = previousPrice > 0 
       ? ((priceChange / previousPrice) * 100).toFixed(1)
