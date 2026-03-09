@@ -33,8 +33,23 @@ async function fetchAndStoreMarketPrices(date = null) {
             console.log(`  Fetching ${product.name} (${product.id})...`);
             
             const priceData = await fetchMarketPrice(product.id, targetDate, targetDate);
+
+            const suspiciousFlatPrice =
+                Number(priceData.minPrice) === 5 &&
+                Number(priceData.maxPrice) === 5 &&
+                Number(priceData.avgPrice) === 5;
+
+            if (suspiciousFlatPrice) {
+                console.log(`    ✗ Skipped suspicious placeholder price for ${product.name}`);
+                continue;
+            }
             
             if (priceData.avgPrice !== null) {
+                const productNameToStore =
+                    (priceData.productName && String(priceData.productName).trim())
+                        ? priceData.productName
+                        : product.name;
+
                 // Store in database
                 const sql = `
                     INSERT INTO market_prices (workspace_id, date, product_id, product_name, min_price, max_price, avg_price) 
@@ -49,7 +64,7 @@ async function fetchAndStoreMarketPrices(date = null) {
                     SYSTEM_WORKSPACE_ID,
                     targetDate,
                     priceData.productId,
-                    priceData.productName,
+                    productNameToStore,
                     priceData.minPrice,
                     priceData.maxPrice,
                     priceData.avgPrice
@@ -115,6 +130,33 @@ async function fetchPricesForDate(date) {
 }
 
 /**
+ * Backfill prices for an inclusive date range (YYYY-MM-DD to YYYY-MM-DD)
+ */
+async function backfillPricesInRange(fromDate, toDate) {
+    if (!fromDate || !toDate) {
+        throw new Error('fromDate and toDate are required');
+    }
+
+    const from = new Date(`${fromDate}T00:00:00.000Z`);
+    const to = new Date(`${toDate}T00:00:00.000Z`);
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw new Error('Invalid date format, expected YYYY-MM-DD');
+    }
+
+    if (from > to) {
+        throw new Error('fromDate must be earlier than or equal to toDate');
+    }
+
+    const current = new Date(from);
+    while (current <= to) {
+        const day = current.toISOString().split('T')[0];
+        await fetchAndStoreMarketPrices(day);
+        current.setUTCDate(current.getUTCDate() + 1);
+    }
+}
+
+/**
  * Get available product IDs
  */
 function getAvailableProducts() {
@@ -128,5 +170,6 @@ module.exports = {
     startScheduler,
     fetchAndStoreMarketPrices,
     fetchPricesForDate,
+    backfillPricesInRange,
     getAvailableProducts
 };

@@ -31,7 +31,7 @@ function fetchMarketPrice(productId, fromDate, toDate) {
 
             if (!first || typeof first !== 'object') return null;
 
-            const productName = first.product_name || first.productName || first.name || first.product || 'Unknown';
+            const productName = first.product_name || first.productName || first.name || first.product || '';
             const minPrice = parseAsNumber(first.min_price ?? first.minPrice ?? first.low_price ?? first.lowPrice);
             const maxPrice = parseAsNumber(first.max_price ?? first.maxPrice ?? first.high_price ?? first.highPrice);
             const avgPrice = parseAsNumber(
@@ -41,30 +41,14 @@ function fetchMarketPrice(productId, fromDate, toDate) {
 
             if (avgPrice === null && minPrice === null && maxPrice === null) return null;
 
+            // Reject obvious placeholder rows that would pollute history (e.g., empty name with flat value).
+            if (!String(productName).trim() && minPrice === avgPrice && maxPrice === avgPrice) {
+                return null;
+            }
+
             return {
                 productId,
                 productName,
-                minPrice,
-                maxPrice,
-                avgPrice,
-                fromDate,
-                toDate,
-                fetchedAt: new Date().toISOString()
-            };
-        };
-
-        const parseFromHtml = (html) => {
-            const minPriceMatch = html.match(/ราคาต่ำสุดเฉลี่ย[^0-9]*([0-9.]+)/);
-            const maxPriceMatch = html.match(/ราคาสูงสุดเฉลี่ย[^0-9]*([0-9.]+)/);
-            const productNameMatch = html.match(/ชื่อสินค้า[^<]*<[^>]*>([^<]+)</);
-
-            const minPrice = minPriceMatch ? parseFloat(minPriceMatch[1]) : null;
-            const maxPrice = maxPriceMatch ? parseFloat(maxPriceMatch[1]) : null;
-            const avgPrice = minPrice !== null && maxPrice !== null ? (minPrice + maxPrice) / 2 : null;
-
-            return {
-                productId,
-                productName: productNameMatch ? productNameMatch[1].trim() : 'Unknown',
                 minPrice,
                 maxPrice,
                 avgPrice,
@@ -102,16 +86,12 @@ function fetchMarketPrice(productId, fromDate, toDate) {
                             }
 
                             let result = null;
-                            const contentType = String(res.headers['content-type'] || '').toLowerCase();
 
-                            if (contentType.includes('application/json')) {
+                            try {
                                 result = parseFromJson(JSON.parse(data));
-                            } else {
-                                try {
-                                    result = parseFromJson(JSON.parse(data));
-                                } catch {
-                                    result = parseFromHtml(data);
-                                }
+                            } catch {
+                                // Do not parse raw HTML pages; they can produce incorrect prices.
+                                result = null;
                             }
 
                             if (!result) {

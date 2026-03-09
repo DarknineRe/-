@@ -34,6 +34,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 
 export function Inventory() {
   const { products, updateProduct, deleteProduct, activityLogs, rollbackActivity } = useData();
@@ -51,6 +59,9 @@ export function Inventory() {
     action: "add" | "reduce";
   } | null>(null);
   const [bubbleAmountInput, setBubbleAmountInput] = useState("");
+  const selectedBubbleProduct = bubbleEditor
+    ? products.find((p) => p.id === bubbleEditor.productId) || null
+    : null;
 
   // Get unique categories
   const categories = ["ทั้งหมด", ...new Set(products.map((p) => p.category))];
@@ -343,44 +354,6 @@ export function Inventory() {
                         </Button>
                       </div>
                     )}
-                    {!isAll && permissions.canEdit && product && bubbleEditor?.productId === product.id && (
-                      <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Input
-                          type="number"
-                          min="1"
-                          inputMode="numeric"
-                          value={bubbleAmountInput}
-                          onChange={(e) => setBubbleAmountInput(e.target.value)}
-                          placeholder="value"
-                          className="h-7 w-24 px-2 text-xs"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          className="h-7 px-2 text-xs"
-                          disabled={bubbleActionProductId === product.id}
-                          onClick={() => {
-                            const amount = Number(bubbleAmountInput || 0);
-                            adjustQuantityFromBubble(product, amount, bubbleEditor.action);
-                          }}
-                        >
-                          ยืนยัน
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => {
-                            setBubbleEditor(null);
-                            setBubbleAmountInput("");
-                          }}
-                        >
-                          ยกเลิก
-                        </Button>
-                      </div>
-                    )}
                     {!isAll && permissions.canEdit && !product && workspace.count > 1 && (
                       <p className="text-[11px] mt-2 opacity-80">มีหลายรายการชื่อเดียวกัน</p>
                     )}
@@ -390,47 +363,6 @@ export function Inventory() {
             </div>
           </div>
         </div>
-      </Card>
-
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">ประวัติสินค้า (ย้อนกลับ)</h3>
-          <p className="text-xs text-gray-500">อัปเดต/ลบ/เพิ่มล่าสุด</p>
-        </div>
-
-        {productHistoryLogs.length === 0 ? (
-          <p className="text-sm text-gray-500">ยังไม่มีประวัติสินค้า</p>
-        ) : (
-          <div className="space-y-2">
-            {productHistoryLogs.map((log) => {
-              const enabled = permissions.canEdit && canRollbackLog(log.details);
-              return (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between rounded-lg border border-gray-200 p-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {getActionLabel(log.action)}สินค้า {log.itemName} {getQuantityChangeText(log)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(log.timestamp).toLocaleString("th-TH")}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!enabled}
-                    onClick={() => enabled && rollbackActivity(log)}
-                  >
-                    ย้อนกลับ
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </Card>
 
       <Card className="p-6">
@@ -543,6 +475,47 @@ export function Inventory() {
         </div>
       </Card>
 
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold text-gray-900">ประวัติสินค้า (ย้อนกลับ)</h3>
+          <p className="text-xs text-gray-500">ล่าสุด</p>
+        </div>
+
+        {productHistoryLogs.length === 0 ? (
+          <p className="text-sm text-gray-500">ยังไม่มีประวัติสินค้า</p>
+        ) : (
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {productHistoryLogs.map((log) => {
+              const enabled = permissions.canEdit && canRollbackLog(log.details);
+              return (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 p-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {getActionLabel(log.action)}สินค้า {log.itemName} {getQuantityChangeText(log)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(log.timestamp).toLocaleString("th-TH")}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!enabled}
+                    onClick={() => enabled && rollbackActivity(log)}
+                  >
+                    ย้อนกลับ
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       {/* Edit Dialog */}
       {editingProduct && (
         <EditProductDialog
@@ -557,6 +530,69 @@ export function Inventory() {
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
       />
+
+      {/* Bubble Value Dialog */}
+      <Dialog
+        open={!!bubbleEditor && !!selectedBubbleProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBubbleEditor(null);
+            setBubbleAmountInput("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {bubbleEditor?.action === "add" ? "เพิ่มจำนวนสินค้า" : "ลดจำนวนสินค้า"}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedBubbleProduct ? `สินค้า: ${selectedBubbleProduct.name}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">value</label>
+            <Input
+              type="number"
+              min="1"
+              inputMode="numeric"
+              value={bubbleAmountInput}
+              onChange={(e) => setBubbleAmountInput(e.target.value)}
+              placeholder="ใส่จำนวน"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setBubbleEditor(null);
+                setBubbleAmountInput("");
+              }}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              className="bg-green-600 hover:bg-green-700"
+              disabled={!selectedBubbleProduct || bubbleActionProductId === selectedBubbleProduct.id}
+              onClick={() => {
+                if (!selectedBubbleProduct || !bubbleEditor) return;
+                const amount = Number(bubbleAmountInput || 0);
+                adjustQuantityFromBubble(
+                  selectedBubbleProduct,
+                  amount,
+                  bubbleEditor.action
+                );
+              }}
+            >
+              ยืนยัน
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <AlertDialog

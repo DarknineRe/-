@@ -1329,6 +1329,48 @@ app.post('/api/market-prices/compare', async (req, res) => {
     }
 });
 
+/**
+ * Repair placeholder market prices and backfill from MOC for a date range.
+ * POST /api/market-prices/maintenance/repair
+ * Body: { fromDate: "2026-03-01", toDate: "2026-03-09", cleanupPlaceholder: true }
+ */
+app.post('/api/market-prices/maintenance/repair', async (req, res) => {
+    try {
+        const { fromDate, toDate, cleanupPlaceholder = true } = req.body || {};
+
+        if (!fromDate || !toDate) {
+            return res.status(400).json({ error: 'fromDate and toDate are required (YYYY-MM-DD)' });
+        }
+
+        let deletedRows = 0;
+        if (cleanupPlaceholder) {
+            const deleteSql = `
+                DELETE FROM market_prices
+                WHERE workspace_id = $1
+                  AND min_price = 5
+                  AND max_price = 5
+                  AND avg_price = 5
+                  AND (product_name IS NULL OR btrim(product_name) = '')
+                  AND date BETWEEN $2 AND $3
+            `;
+            const deleted = await pool.query(deleteSql, ['default', fromDate, toDate]);
+            deletedRows = deleted.rowCount || 0;
+        }
+
+        await priceScheduler.backfillPricesInRange(fromDate, toDate);
+
+        res.json({
+            success: true,
+            fromDate,
+            toDate,
+            deletedRows,
+            message: 'Market price repair completed',
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Start Server ---
 
 app.listen(port, () => {
