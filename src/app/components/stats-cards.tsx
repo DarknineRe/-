@@ -1,13 +1,12 @@
-import { Package, AlertTriangle, Layers, TrendingUp } from "lucide-react";
+import { Package, Layers } from "lucide-react";
 import { Card } from "./ui/card";
 import type { Product } from "../App";
 
 interface StatsCardsProps {
   products: Product[];
-  lowStockProducts: Product[];
 }
 
-export function StatsCards({ products, lowStockProducts }: StatsCardsProps) {
+export function StatsCards({ products }: StatsCardsProps) {
   const categories = new Set(products.map((p) => p.category)).size;
 
   const stats = [
@@ -20,14 +19,6 @@ export function StatsCards({ products, lowStockProducts }: StatsCardsProps) {
       bgColor: "bg-blue-50",
     },
     {
-      title: "สินค้าใกล้หมด",
-      value: lowStockProducts.length,
-      icon: AlertTriangle,
-      color: "bg-red-500",
-      textColor: "text-red-600",
-      bgColor: "bg-red-50",
-    },
-    {
       title: "หมวดหมู่",
       value: categories,
       icon: Layers,
@@ -38,7 +29,7 @@ export function StatsCards({ products, lowStockProducts }: StatsCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
       {stats.map((stat, index) => {
         const Icon = stat.icon;
         return (

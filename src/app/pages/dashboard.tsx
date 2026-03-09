@@ -2,11 +2,9 @@ import { useData } from "../context/data-context";
 import { Card } from "../components/ui/card";
 import {
   Package,
-  AlertTriangle,
   Calendar,
   TrendingUp,
   Sprout,
-  DollarSign,
 } from "lucide-react";
 import {
   LineChart,
@@ -25,7 +23,6 @@ import { Badge } from "../components/ui/badge";
 export function Dashboard() {
   const { products, schedules, priceHistory } = useData();
 
-  const lowStockProducts = products.filter((p) => p.quantity === 0);
   const activePlantings = schedules.filter((s) => s.status === "planted").length;
   const plannedPlantings = schedules.filter((s) => s.status === "planned").length;
 
@@ -38,15 +35,6 @@ export function Dashboard() {
       color: "bg-blue-500",
       textColor: "text-blue-600",
       bgColor: "bg-blue-50",
-    },
-    {
-      title: "สินค้าใกล้หมด",
-      value: lowStockProducts.length,
-      subtitle: "ต้องเติมสต็อก",
-      icon: AlertTriangle,
-      color: "bg-red-500",
-      textColor: "text-red-600",
-      bgColor: "bg-red-50",
     },
     {
       title: "กำลังปลูก",
@@ -99,7 +87,7 @@ export function Dashboard() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Price Trend Chart */}
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -156,34 +144,6 @@ export function Dashboard() {
 
       {/* Additional Info Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Low Stock Alert */}
-        <Card className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <h3 className="text-lg font-semibold">สินค้าใกล้หมด</h3>
-          </div>
-          {lowStockProducts.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">ไม่มีสินค้าที่ใกล้หมด</p>
-          ) : (
-            <div className="space-y-3">
-              {lowStockProducts.slice(0, 5).map((product) => (
-                <div
-                  key={product.id}
-                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{product.name}</p>
-                    <p className="text-sm text-gray-600">
-                      เหลือ {product.quantity} {product.unit}
-                    </p>
-                  </div>
-                  <Badge variant="destructive">ใกล้หมด</Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* Upcoming Harvests */}
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">

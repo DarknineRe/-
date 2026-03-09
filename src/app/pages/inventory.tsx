@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Search, Edit, Trash2, AlertCircle, Plus } from "lucide-react";
+import { Search, Edit, Trash2, AlertCircle, Plus, FolderOpen } from "lucide-react";
 import type { Product } from "../context/data-context";
 import { EditProductDialog } from "../components/edit-product-dialog";
 import { AddProductDialog } from "../components/add-product-dialog";
@@ -44,6 +44,22 @@ export function Inventory() {
 
   // Get unique categories
   const categories = ["ทั้งหมด", ...new Set(products.map((p) => p.category))];
+
+  const workspaceItems = categories.map((category) => {
+    const categoryProducts =
+      category === "ทั้งหมด"
+        ? products
+        : products.filter((product) => product.category === category);
+
+    return {
+      name: category,
+      count: categoryProducts.length,
+      totalQuantity: categoryProducts.reduce(
+        (sum, product) => sum + product.quantity,
+        0
+      ),
+    };
+  });
 
   // Filter products
   const filteredProducts = products.filter((product) => {
@@ -77,6 +93,41 @@ export function Inventory() {
           เพิ่มสินค้าใหม่
         </Button>
       </div>
+
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <FolderOpen className="h-5 w-5 text-green-600" />
+          <h3 className="text-lg font-semibold text-gray-900">พื้นที่ทำงานสินค้า</h3>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          เลือกบับเบิลเพื่อเปิดดูสินค้าตามหมวดหมู่ พร้อมจำนวนรายการและปริมาณรวม
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          {workspaceItems.map((workspace) => {
+            const isActive = categoryFilter === workspace.name;
+
+            return (
+              <button
+                key={workspace.name}
+                type="button"
+                onClick={() => setCategoryFilter(workspace.name)}
+                className={`rounded-full border px-4 py-3 text-left transition-all min-w-[180px] ${
+                  isActive
+                    ? "border-green-600 bg-green-600 text-white shadow"
+                    : "border-green-200 bg-green-50 text-gray-800 hover:border-green-400 hover:bg-green-100"
+                }`}
+              >
+                <p className="text-xs opacity-80">Workspace</p>
+                <p className="font-semibold leading-tight">{workspace.name}</p>
+                <p className="text-xs mt-1">
+                  {workspace.count.toLocaleString()} รายการ • {workspace.totalQuantity.toLocaleString()} หน่วย
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       <Card className="p-6">
         {/* Filters */}

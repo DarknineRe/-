@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
-import { Package, TrendingUp, DollarSign, AlertCircle, BarChart3 } from "lucide-react";
+import { Package, TrendingUp, BarChart3, Layers } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -32,7 +32,6 @@ export function InventorySummary() {
   // คำนวณสถิติ
   const totalProducts = products.length;
   const totalQuantity = products.reduce((sum, p) => sum + p.quantity, 0);
-  const lowStockProducts = products.filter((p) => p.quantity === 0);
 
   // จัดกลุ่มตามหมวดหมู่
   const categoryData = products.reduce((acc, product) => {
@@ -54,6 +53,7 @@ export function InventorySummary() {
     name: cat.name,
     value: cat.count,
   }));
+  const totalCategories = categoryChartData.length;
 
   // Top 5 สินค้าที่มีจำนวนมากที่สุด
   const topQuantityProducts = [...products]
@@ -103,14 +103,12 @@ export function InventorySummary() {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">สินค้าใกล้หมด</p>
-              <p className="text-3xl font-bold text-red-600">
-                {lowStockProducts.length}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">รายการ</p>
+              <p className="text-sm text-gray-600 mb-1">จำนวนหมวดหมู่</p>
+              <p className="text-3xl font-bold text-purple-600">{totalCategories}</p>
+              <p className="text-xs text-gray-500 mt-1">หมวดหมู่</p>
             </div>
-            <div className="p-3 bg-red-100 rounded-full">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+            <div className="p-3 bg-purple-100 rounded-full">
+              <Layers className="h-6 w-6 text-purple-600" />
             </div>
           </div>
         </Card>
@@ -252,42 +250,6 @@ export function InventorySummary() {
           </Table>
         </div>
       </Card>
-
-      {/* Low Stock Alert */}
-      {lowStockProducts.length > 0 && (
-        <Card className="p-6 border-red-200 bg-red-50">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-6 w-6 text-red-600 mt-1" />
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-red-900 mb-2">
-                แจ้งเตือน: สินค้าใกล้หมด
-              </h3>
-              <p className="text-sm text-red-700 mb-3">
-                มีสินค้า {lowStockProducts.length} รายการที่หมดสต็อก
-              </p>
-              <div className="space-y-2">
-                {lowStockProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between bg-white p-3 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Package className="h-4 w-4 text-red-600" />
-                      <div>
-                        <p className="font-medium text-gray-900">{product.name}</p>
-                        <p className="text-sm text-gray-600">
-                          คงเหลือ: {product.quantity} {product.unit}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="destructive">สินค้าหมด</Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }
