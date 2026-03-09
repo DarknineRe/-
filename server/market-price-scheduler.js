@@ -12,12 +12,13 @@ const pool = require('./db');
 const SYSTEM_WORKSPACE_ID = 'default';
 
 const CORE_PRODUCTS = [
-    { id: 'P11012', name: 'ไก่สดชำแหละ' },
-    { id: 'P11001', name: 'สุกรชำแหละ เนื้อสัน สันใน' },
-    { id: 'P14001', name: 'มะม่วง' },
     { id: 'P12005', name: 'มะเขือเทศ' },
     { id: 'P12001', name: 'กะหล่ำปลี' },
 ];
+
+function isVegetableProduct(product) {
+    return /^P12\d{3}$/i.test(String(product?.id || ''));
+}
 
 async function getProductsToTrack() {
     const limit = Number(process.env.MARKET_PRICE_TRACK_LIMIT || 20);
@@ -25,18 +26,18 @@ async function getProductsToTrack() {
 
     try {
         const catalogProducts = await fetchProductCatalog(safeLimit);
-        const combined = [...CORE_PRODUCTS, ...catalogProducts];
+        const combined = [...CORE_PRODUCTS, ...catalogProducts.filter(isVegetableProduct)];
         const unique = [];
         const seen = new Set();
 
         for (const product of combined) {
-            if (!product?.id || seen.has(product.id)) continue;
+            if (!product?.id || !isVegetableProduct(product) || seen.has(product.id)) continue;
             seen.add(product.id);
             unique.push(product);
         }
 
         if (unique.length > 0) {
-            console.log(`[Market Price Scheduler] Tracking ${unique.length} products`);
+            console.log(`[Market Price Scheduler] Tracking ${unique.length} vegetable products`);
             return unique;
         }
     } catch (err) {

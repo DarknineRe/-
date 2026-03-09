@@ -1333,7 +1333,14 @@ app.post('/api/market-prices/compare', async (req, res) => {
 /**
  * Repair placeholder market prices and backfill from MOC for a date range.
  * POST /api/market-prices/maintenance/repair
- * Body: { fromDate: "2026-03-01", toDate: "2026-03-09", cleanupPlaceholder: true }
+ * Body: {
+ *   fromDate: "2026-03-01",
+ *   toDate: "2026-03-09",
+ *   cleanupPlaceholder: true,
+ *   cleanupNonVegetable: true,
+ *   repairMissingNames: true,
+ *   workspaceId: "default"
+ * }
  */
 app.post('/api/market-prices/maintenance/repair', async (req, res) => {
     try {
@@ -1341,6 +1348,7 @@ app.post('/api/market-prices/maintenance/repair', async (req, res) => {
             fromDate,
             toDate,
             cleanupPlaceholder = true,
+            cleanupNonVegetable = false,
             repairMissingNames = true,
             workspaceId = 'default'
         } = req.body || {};
@@ -1362,6 +1370,18 @@ app.post('/api/market-prices/maintenance/repair', async (req, res) => {
             `;
             const deleted = await pool.query(deleteSql, [workspaceId, fromDate, toDate]);
             deletedRows = deleted.rowCount || 0;
+        }
+
+        let deletedNonVegetableRows = 0;
+        if (cleanupNonVegetable) {
+            const deleteNonVegetableSql = `
+                DELETE FROM market_prices
+                WHERE workspace_id = $1
+                  AND date BETWEEN $2 AND $3
+                  AND product_id !~ '^P12\\d{3}$'
+            `;
+            const deletedNonVegetable = await pool.query(deleteNonVegetableSql, [workspaceId, fromDate, toDate]);
+            deletedNonVegetableRows = deletedNonVegetable.rowCount || 0;
         }
 
         let repairedNameRows = 0;
@@ -1391,6 +1411,7 @@ app.post('/api/market-prices/maintenance/repair', async (req, res) => {
             toDate,
             workspaceId,
             deletedRows,
+            deletedNonVegetableRows,
             repairedNameRows,
             message: 'Market price repair completed',
         });
