@@ -1249,7 +1249,8 @@ app.post('/api/market-prices/store', async (req, res) => {
             INSERT INTO market_prices (workspace_id, date, product_id, product_name, min_price, max_price, avg_price)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (workspace_id, date, product_id)
-            DO UPDATE SET min_price = EXCLUDED.min_price,
+            DO UPDATE SET product_name = COALESCE(NULLIF(EXCLUDED.product_name, ''), market_prices.product_name),
+                          min_price = EXCLUDED.min_price,
                           max_price = EXCLUDED.max_price,
                           avg_price = EXCLUDED.avg_price
         `;
@@ -1336,7 +1337,13 @@ app.post('/api/market-prices/compare', async (req, res) => {
  */
 app.post('/api/market-prices/maintenance/repair', async (req, res) => {
     try {
-        const { fromDate, toDate, cleanupPlaceholder = true } = req.body || {};
+        const {
+            fromDate,
+            toDate,
+            cleanupPlaceholder = true,
+            repairMissingNames = true,
+            workspaceId = 'default'
+        } = req.body || {};
 
         if (!fromDate || !toDate) {
             return res.status(400).json({ error: 'fromDate and toDate are required (YYYY-MM-DD)' });
@@ -1353,8 +1360,27 @@ app.post('/api/market-prices/maintenance/repair', async (req, res) => {
                   AND (product_name IS NULL OR btrim(product_name) = '')
                   AND date BETWEEN $2 AND $3
             `;
-            const deleted = await pool.query(deleteSql, ['default', fromDate, toDate]);
+            const deleted = await pool.query(deleteSql, [workspaceId, fromDate, toDate]);
             deletedRows = deleted.rowCount || 0;
+        }
+
+        let repairedNameRows = 0;
+        if (repairMissingNames) {
+            for (const [productId, mapping] of Object.entries(PRODUCT_MAP)) {
+                const displayName = mapping?.name || '';
+                if (!displayName) continue;
+
+                const updateSql = `
+                    UPDATE market_prices
+                    SET product_name = $1
+                    WHERE workspace_id = $2
+                      AND product_id = $3
+                      AND (product_name IS NULL OR btrim(product_name) = '')
+                      AND date BETWEEN $4 AND $5
+                `;
+                const updated = await pool.query(updateSql, [displayName, workspaceId, productId, fromDate, toDate]);
+                repairedNameRows += updated.rowCount || 0;
+            }
         }
 
         await priceScheduler.backfillPricesInRange(fromDate, toDate);
@@ -1363,7 +1389,9 @@ app.post('/api/market-prices/maintenance/repair', async (req, res) => {
             success: true,
             fromDate,
             toDate,
+            workspaceId,
             deletedRows,
+            repairedNameRows,
             message: 'Market price repair completed',
         });
     } catch (err) {

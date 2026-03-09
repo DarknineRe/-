@@ -7,28 +7,55 @@
  * scheduler.startScheduler(); // Runs daily at 6 AM
  */
 
-const { fetchMarketPrice, PRODUCT_MAP } = require('./market-price-service');
+const { fetchMarketPrice, PRODUCT_MAP, fetchProductCatalog } = require('./market-price-service');
 const pool = require('./db');
 const SYSTEM_WORKSPACE_ID = 'default';
 
-// List of products to track
-const PRODUCTS_TO_TRACK = [
+const CORE_PRODUCTS = [
     { id: 'P11012', name: 'ไก่สดชำแหละ' },
-    { id: 'P11001', name: 'ข้าวเหนียว' },
+    { id: 'P11001', name: 'สุกรชำแหละ เนื้อสัน สันใน' },
     { id: 'P14001', name: 'มะม่วง' },
     { id: 'P12005', name: 'มะเขือเทศ' },
     { id: 'P12001', name: 'กะหล่ำปลี' },
 ];
+
+async function getProductsToTrack() {
+    const limit = Number(process.env.MARKET_PRICE_TRACK_LIMIT || 20);
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 80) : 20;
+
+    try {
+        const catalogProducts = await fetchProductCatalog(safeLimit);
+        const combined = [...CORE_PRODUCTS, ...catalogProducts];
+        const unique = [];
+        const seen = new Set();
+
+        for (const product of combined) {
+            if (!product?.id || seen.has(product.id)) continue;
+            seen.add(product.id);
+            unique.push(product);
+        }
+
+        if (unique.length > 0) {
+            console.log(`[Market Price Scheduler] Tracking ${unique.length} products`);
+            return unique;
+        }
+    } catch (err) {
+        console.warn('[Market Price Scheduler] Failed to load product catalog, using core products only:', err.message);
+    }
+
+    return CORE_PRODUCTS;
+}
 
 /**
  * Fetch and store market prices for all tracked products
  */
 async function fetchAndStoreMarketPrices(date = null) {
     const targetDate = date || new Date().toISOString().split('T')[0];
+    const productsToTrack = await getProductsToTrack();
     
     console.log(`[Market Price Scheduler] Fetching prices for ${targetDate}...`);
     
-    for (const product of PRODUCTS_TO_TRACK) {
+    for (const product of productsToTrack) {
         try {
             console.log(`  Fetching ${product.name} (${product.id})...`);
             
@@ -55,6 +82,7 @@ async function fetchAndStoreMarketPrices(date = null) {
                     INSERT INTO market_prices (workspace_id, date, product_id, product_name, min_price, max_price, avg_price) 
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (workspace_id, date, product_id) DO UPDATE SET
+                        product_name = COALESCE(NULLIF(EXCLUDED.product_name, ''), market_prices.product_name),
                         min_price = EXCLUDED.min_price,
                         max_price = EXCLUDED.max_price,
                         avg_price = EXCLUDED.avg_price
@@ -160,7 +188,7 @@ async function backfillPricesInRange(fromDate, toDate) {
  * Get available product IDs
  */
 function getAvailableProducts() {
-    return PRODUCTS_TO_TRACK.map(p => ({
+    return CORE_PRODUCTS.map(p => ({
         id: p.id,
         name: p.name
     }));

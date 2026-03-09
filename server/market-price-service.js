@@ -3,6 +3,33 @@ const https = require('https');
 const PRIMARY_API_BASE = 'https://dataapi.moc.go.th/gis-product-price';
 const FALLBACK_API_BASE = 'https://data.moc.go.th/OpenData/GISProductPrice';
 
+function decodeHtmlEntities(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => {
+            try {
+                return String.fromCodePoint(parseInt(hex, 16));
+            } catch {
+                return '';
+            }
+        })
+        .replace(/&#([0-9]+);/g, (_, num) => {
+            try {
+                return String.fromCodePoint(parseInt(num, 10));
+            } catch {
+                return '';
+            }
+        });
+}
+
+function sanitizeProductLabel(label) {
+    const decoded = decodeHtmlEntities(label || '')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return decoded.replace(/^P\d{5}\s*:\s*/i, '').trim();
+}
+
 /**
  * Fetch market prices from Thailand MOC Open Data API
  * @param {string} productId - Product ID (e.g., "P11012")
@@ -56,25 +83,6 @@ function fetchMarketPrice(productId, fromDate, toDate) {
                 toDate,
                 fetchedAt: new Date().toISOString()
             };
-        };
-
-        const decodeHtmlEntities = (text) => {
-            if (!text) return '';
-            return String(text)
-                .replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => {
-                    try {
-                        return String.fromCodePoint(parseInt(hex, 16));
-                    } catch {
-                        return '';
-                    }
-                })
-                .replace(/&#([0-9]+);/g, (_, num) => {
-                    try {
-                        return String.fromCodePoint(parseInt(num, 10));
-                    } catch {
-                        return '';
-                    }
-                });
         };
 
         const parseFromHtml = (html) => {
@@ -191,6 +199,58 @@ function fetchMarketPrice(productId, fromDate, toDate) {
     });
 }
 
+/**
+ * Fetch product catalog options from MOC fallback page.
+ * @param {number} limit
+ * @returns {Promise<Array<{id:string,name:string}>>}
+ */
+function fetchProductCatalog(limit = 20) {
+    return new Promise((resolve, reject) => {
+        const request = https.get(
+            FALLBACK_API_BASE,
+            {
+                headers: {
+                    Accept: 'text/html,application/xhtml+xml',
+                    'User-Agent': 'ProjectValley/1.0'
+                },
+                timeout: 15000
+            },
+            (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    try {
+                        const regex = /<option\s+value="(P\d{5})"[^>]*>([\s\S]*?)<\/option>/gi;
+                        const rows = [];
+                        const seen = new Set();
+                        let match;
+
+                        while ((match = regex.exec(data)) !== null) {
+                            const id = match[1];
+                            const name = sanitizeProductLabel(match[2]);
+                            if (!id || !name || seen.has(id)) continue;
+                            seen.add(id);
+                            rows.push({ id, name });
+                            if (rows.length >= limit) break;
+                        }
+
+                        resolve(rows);
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            }
+        );
+
+        request.on('timeout', () => {
+            request.destroy(new Error('Catalog request timeout'));
+        });
+        request.on('error', reject);
+    });
+}
+
 // Thai product IDs and their mapping to local crop names
 const PRODUCT_MAP = {
     'P11012': { name: 'ไก่สดชำแหละ', localName: 'ไก่' },
@@ -202,5 +262,7 @@ const PRODUCT_MAP = {
 
 module.exports = {
     fetchMarketPrice,
-    PRODUCT_MAP
+    PRODUCT_MAP,
+    fetchProductCatalog,
+    sanitizeProductLabel,
 };

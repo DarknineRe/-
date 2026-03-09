@@ -91,41 +91,13 @@ export function Inventory() {
   const categoryWorkspaceItems = buildWorkspaceItems(categories, "category");
   const productWorkspaceItems = buildWorkspaceItems(productNames, "product");
 
-  const bubbleThemes = [
-    {
-      base: "from-emerald-50 via-lime-50 to-white",
-      border: "border-emerald-200/70",
-      text: "text-emerald-900",
-      meta: "text-emerald-700",
-      chip: "bg-emerald-100 text-emerald-800",
-    },
-    {
-      base: "from-sky-50 via-cyan-50 to-white",
-      border: "border-sky-200/70",
-      text: "text-sky-900",
-      meta: "text-sky-700",
-      chip: "bg-sky-100 text-sky-800",
-    },
-    {
-      base: "from-amber-50 via-orange-50 to-white",
-      border: "border-amber-200/70",
-      text: "text-amber-900",
-      meta: "text-amber-700",
-      chip: "bg-amber-100 text-amber-800",
-    },
-    {
-      base: "from-teal-50 via-cyan-50 to-white",
-      border: "border-teal-200/70",
-      text: "text-teal-900",
-      meta: "text-teal-700",
-      chip: "bg-teal-100 text-teal-800",
-    },
-  ] as const;
-
-  const getBubbleTheme = (name: string) => {
-    const seed = name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    return bubbleThemes[seed % bubbleThemes.length];
-  };
+  const bubbleTheme = {
+    base: "from-emerald-50 via-green-50 to-white",
+    border: "border-emerald-200/70",
+    text: "text-emerald-900",
+    meta: "text-emerald-700",
+    chip: "bg-emerald-100 text-emerald-800",
+  } as const;
 
   // Filter products
   const filteredProducts = products.filter((product) => {
@@ -292,171 +264,175 @@ export function Inventory() {
         </div>
 
         <div className="space-y-4">
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">ตามหมวดหมู่</p>
-            <div className="flex flex-wrap gap-3">
-              {categoryWorkspaceItems.map((workspace) => {
-                const isActive =
-                  workspaceMode === "category" && workspaceFilter === workspace.name;
-                const theme = getBubbleTheme(workspace.name);
-                const isAll = workspace.name === "ทั้งหมด";
+          {workspaceMode === "category" && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">ตามหมวดหมู่</p>
+              <div className="flex flex-wrap gap-3">
+                {categoryWorkspaceItems.map((workspace) => {
+                  const isActive =
+                    workspaceMode === "category" && workspaceFilter === workspace.name;
+                  const theme = bubbleTheme;
+                  const isAll = workspace.name === "ทั้งหมด";
 
-                return (
-                  <button
-                    key={`category-${workspace.name}`}
-                    type="button"
-                    onClick={() => {
-                      setWorkspaceMode("category");
-                      setWorkspaceFilter(workspace.name);
-                    }}
-                    className={`relative overflow-hidden rounded-[24px] border bg-gradient-to-br px-4 py-3 text-left transition-all min-w-[200px] shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                      isActive
-                        ? "border-emerald-600 bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-200"
-                        : `${theme.base} ${theme.border}`
-                    }`}
-                  >
-                    {!isActive && (
-                      <span className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-white/50 blur-md" />
-                    )}
-                    <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className={`font-semibold leading-tight ${isActive ? "text-white" : theme.text}`}>
-                          {workspace.name}
+                  return (
+                    <button
+                      key={`category-${workspace.name}`}
+                      type="button"
+                      onClick={() => {
+                        setWorkspaceMode("category");
+                        setWorkspaceFilter(workspace.name);
+                      }}
+                      className={`relative overflow-hidden rounded-[24px] border bg-gradient-to-br px-4 py-3 text-left transition-all min-w-[200px] shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
+                        isActive
+                          ? "border-emerald-600 bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-200"
+                          : `${theme.base} ${theme.border}`
+                      }`}
+                    >
+                      {!isActive && (
+                        <span className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-white/50 blur-md" />
+                      )}
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className={`font-semibold leading-tight ${isActive ? "text-white" : theme.text}`}>
+                            {workspace.name}
+                          </p>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              isActive
+                                ? "bg-white/20 text-white"
+                                : theme.chip
+                            }`}
+                          >
+                            {workspace.count.toLocaleString()} รายการ
+                          </span>
+                        </div>
+                        <p className={`text-xs mt-2 ${isActive ? "text-white/90" : theme.meta}`}>
+                          ปริมาณรวม {workspace.totalQuantity.toLocaleString()} {isAll ? "หน่วย" : "หน่วย"}
                         </p>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : theme.chip
-                          }`}
-                        >
-                          {workspace.count.toLocaleString()} รายการ
-                        </span>
                       </div>
-                      <p className={`text-xs mt-2 ${isActive ? "text-white/90" : theme.meta}`}>
-                        ปริมาณรวม {workspace.totalQuantity.toLocaleString()} {isAll ? "หน่วย" : "หน่วย"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">ตามชื่อสินค้า</p>
-            <div className="flex flex-wrap gap-3">
-              {productWorkspaceItems.map((workspace) => {
-                const isActive =
-                  workspaceMode === "product" && workspaceFilter === workspace.name;
-                const matchedProducts = products.filter((p) => p.name === workspace.name);
-                const product = matchedProducts.length === 1 ? matchedProducts[0] : null;
-                const isAll = workspace.name === "ทั้งหมด";
-                const unitLabel = product ? product.unit : "หน่วย";
-                const theme = getBubbleTheme(workspace.name);
+          {workspaceMode === "product" && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">ตามชื่อสินค้า</p>
+              <div className="flex flex-wrap gap-3">
+                {productWorkspaceItems.map((workspace) => {
+                  const isActive =
+                    workspaceMode === "product" && workspaceFilter === workspace.name;
+                  const matchedProducts = products.filter((p) => p.name === workspace.name);
+                  const product = matchedProducts.length === 1 ? matchedProducts[0] : null;
+                  const isAll = workspace.name === "ทั้งหมด";
+                  const unitLabel = product ? product.unit : "หน่วย";
+                  const theme = bubbleTheme;
 
-                return (
-                  <button
-                    key={`product-${workspace.name}`}
-                    type="button"
-                    onClick={() => {
-                      setWorkspaceMode("product");
-                      setWorkspaceFilter(workspace.name);
-                    }}
-                    className={`relative overflow-hidden rounded-[24px] border bg-gradient-to-br px-4 py-3 text-left transition-all min-w-[220px] shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                      isActive
-                        ? "border-emerald-600 bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-200"
-                        : `${theme.base} ${theme.border}`
-                    }`}
-                  >
-                    {!isActive && (
-                      <span className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-white/50 blur-md" />
-                    )}
-                    <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className={`font-semibold leading-tight ${isActive ? "text-white" : theme.text}`}>
-                          {workspace.name}
+                  return (
+                    <button
+                      key={`product-${workspace.name}`}
+                      type="button"
+                      onClick={() => {
+                        setWorkspaceMode("product");
+                        setWorkspaceFilter(workspace.name);
+                      }}
+                      className={`relative overflow-hidden rounded-[24px] border bg-gradient-to-br px-4 py-3 text-left transition-all min-w-[220px] shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
+                        isActive
+                          ? "border-emerald-600 bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-200"
+                          : `${theme.base} ${theme.border}`
+                      }`}
+                    >
+                      {!isActive && (
+                        <span className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-white/50 blur-md" />
+                      )}
+                      <div className="relative z-10">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className={`font-semibold leading-tight ${isActive ? "text-white" : theme.text}`}>
+                            {workspace.name}
+                          </p>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              isActive
+                                ? "bg-white/20 text-white"
+                                : theme.chip
+                            }`}
+                          >
+                            {workspace.count.toLocaleString()} รายการ
+                          </span>
+                        </div>
+                        <p className={`text-xs mt-2 ${isActive ? "text-white/90" : theme.meta}`}>
+                          ปริมาณรวม {workspace.totalQuantity.toLocaleString()} {unitLabel}
                         </p>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            isActive
-                              ? "bg-white/20 text-white"
-                              : theme.chip
-                          }`}
-                        >
-                          {workspace.count.toLocaleString()} รายการ
-                        </span>
                       </div>
-                      <p className={`text-xs mt-2 ${isActive ? "text-white/90" : theme.meta}`}>
-                        ปริมาณรวม {workspace.totalQuantity.toLocaleString()} {unitLabel}
-                      </p>
-                    </div>
-                    {!isAll && permissions.canEdit && product && (
-                      <div className="relative z-10 mt-2 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled={bubbleActionProductId === product.id || product.quantity <= 0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBubbleEditor({ productId: product.id, action: "reduce" });
-                            setBubbleAmountInput("");
-                          }}
-                          className="h-7 px-2 bg-white/80 hover:bg-white"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled={bubbleActionProductId === product.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBubbleEditor({ productId: product.id, action: "add" });
-                            setBubbleAmountInput("");
-                          }}
-                          className="h-7 px-2 bg-white/80 hover:bg-white"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          disabled={bubbleActionProductId === product.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingProductId(product.id);
-                          }}
-                          className="h-7 px-2"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                    {!isAll && permissions.canEdit && !product && workspace.count > 1 && (
-                      <p className="text-[11px] mt-2 opacity-80">มีหลายรายการชื่อเดียวกัน</p>
-                    )}
-                  </button>
-                );
-              })}
+                      {!isAll && permissions.canEdit && product && (
+                        <div className="relative z-10 mt-2 flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={bubbleActionProductId === product.id || product.quantity <= 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBubbleEditor({ productId: product.id, action: "reduce" });
+                              setBubbleAmountInput("");
+                            }}
+                            className="h-7 px-2 bg-white/80 hover:bg-white"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={bubbleActionProductId === product.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBubbleEditor({ productId: product.id, action: "add" });
+                              setBubbleAmountInput("");
+                            }}
+                            className="h-7 px-2 bg-white/80 hover:bg-white"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={bubbleActionProductId === product.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingProductId(product.id);
+                            }}
+                            className="h-7 px-2"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {!isAll && permissions.canEdit && !product && workspace.count > 1 && (
+                        <p className="text-[11px] mt-2 opacity-80">มีหลายรายการชื่อเดียวกัน</p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </Card>
 
       <Card className="p-6">
         {lowStockProducts.length > 0 && (
-          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3">
             <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+              <AlertCircle className="h-4 w-4 text-emerald-600 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-amber-800">
+                <p className="text-sm font-semibold text-emerald-800">
                   แจ้งเตือนสินค้าใกล้หมด {lowStockProducts.length} รายการ
                 </p>
-                <p className="text-xs text-amber-700 mt-1">
+                <p className="text-xs text-emerald-700 mt-1">
                   {lowStockProducts
                     .slice(0, 3)
                     .map(
