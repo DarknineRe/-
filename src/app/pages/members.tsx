@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useWorkspace } from "../context/workspace-context";
 import type { WorkspaceMember, WorkspacePermissions } from "../context/workspace-context";
@@ -11,6 +11,7 @@ import { Switch } from "../components/ui/switch";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -54,7 +55,10 @@ export function Members() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
-  const [selectedMemberForViews, setSelectedMemberForViews] = useState<WorkspaceMember | null>(null);
+  const [selectedMemberForViewsId, setSelectedMemberForViewsId] = useState<string | null>(null);
+  const [viewPermissionDraft, setViewPermissionDraft] = useState<
+    Partial<WorkspacePermissions> | null
+  >(null);
   const userRole = getUserRole();
   const userPermissions = getUserPermissions();
   const isOwner = userRole === "owner";
@@ -137,6 +141,63 @@ export function Members() {
 
   const owner = currentWorkspace.members.find((m) => m.role === "owner");
   const employees = currentWorkspace.members.filter((m) => m.role === "employee");
+  const selectedMemberForViews = selectedMemberForViewsId
+    ? currentWorkspace.members.find((m) => m.id === selectedMemberForViewsId) || null
+    : null;
+  const viewPermissionItems: Array<{
+    key:
+      | "viewDashboard"
+      | "viewInventory"
+      | "viewSummary"
+      | "viewCalendar"
+      | "viewAnalysis"
+      | "viewPriceComparison"
+      | "viewRecommendations"
+      | "viewMembers"
+      | "viewActivity";
+    label: string;
+  }> = [
+    { key: "viewDashboard", label: "ภาพรวม" },
+    { key: "viewInventory", label: "จัดการสต็อก" },
+    { key: "viewSummary", label: "สรุปสต็อก" },
+    { key: "viewCalendar", label: "ปฏิทินการปลูก" },
+    { key: "viewAnalysis", label: "วิเคราะห์ราคา" },
+    { key: "viewPriceComparison", label: "เปรียบเทียบราคา" },
+    { key: "viewRecommendations", label: "คำแนะนำ" },
+    { key: "viewMembers", label: "สมาชิก" },
+    { key: "viewActivity", label: "ประวัติการเปลี่ยนแปลง" },
+  ];
+
+  useEffect(() => {
+    if (!selectedMemberForViews) {
+      setViewPermissionDraft(null);
+      return;
+    }
+
+    setViewPermissionDraft({
+      viewDashboard: selectedMemberForViews.viewDashboard,
+      viewInventory: selectedMemberForViews.viewInventory,
+      viewSummary: selectedMemberForViews.viewSummary,
+      viewCalendar: selectedMemberForViews.viewCalendar,
+      viewAnalysis: selectedMemberForViews.viewAnalysis,
+      viewPriceComparison: selectedMemberForViews.viewPriceComparison,
+      viewRecommendations: selectedMemberForViews.viewRecommendations,
+      viewMembers: selectedMemberForViews.viewMembers,
+      viewActivity: selectedMemberForViews.viewActivity,
+    });
+  }, [selectedMemberForViews]);
+
+  const applyViewPermissionDraft = async () => {
+    if (!selectedMemberForViews || !viewPermissionDraft) return;
+    const latestMember = currentWorkspace.members.find(
+      (m) => m.id === selectedMemberForViews.id
+    );
+    if (!latestMember) return;
+
+    const next = buildNextPermissions(latestMember, viewPermissionDraft);
+    await handlePermissionChange(latestMember.id, next);
+    setSelectedMemberForViewsId(null);
+  };
 
   const buildNextPermissions = (
     member: WorkspaceMember,
@@ -412,7 +473,7 @@ export function Members() {
                       variant="outline"
                       size="sm"
                       disabled={!canManagePermissions || updatingMemberId === member.id || !member.canView}
-                      onClick={() => setSelectedMemberForViews(member)}
+                      onClick={() => setSelectedMemberForViewsId(member.id)}
                     >
                       ตั้งค่า
                     </Button>
@@ -485,7 +546,7 @@ export function Members() {
 
       <Dialog
         open={!!selectedMemberForViews}
-        onOpenChange={(open) => !open && setSelectedMemberForViews(null)}
+        onOpenChange={(open) => !open && setSelectedMemberForViewsId(null)}
       >
         <DialogContent>
           <DialogHeader>
@@ -497,37 +558,39 @@ export function Members() {
 
           {selectedMemberForViews && (
             <div className="space-y-4">
-              {[
-                { key: "viewDashboard", label: "ภาพรวม" },
-                { key: "viewInventory", label: "จัดการสต็อก" },
-                { key: "viewSummary", label: "สรุปสต็อก" },
-                { key: "viewCalendar", label: "ปฏิทินการปลูก" },
-                { key: "viewAnalysis", label: "วิเคราะห์ราคา" },
-                { key: "viewPriceComparison", label: "เปรียบเทียบราคา" },
-                { key: "viewRecommendations", label: "คำแนะนำ" },
-                { key: "viewMembers", label: "สมาชิก" },
-                { key: "viewActivity", label: "ประวัติการเปลี่ยนแปลง" },
-              ].map((item) => (
+              {viewPermissionItems.map((item) => (
                 <div key={item.key} className="flex items-center justify-between">
                   <span className="text-sm text-gray-700">{item.label}</span>
                   <Switch
-                    checked={Boolean((selectedMemberForViews as any)[item.key])}
+                    checked={Boolean(viewPermissionDraft?.[item.key])}
                     disabled={updatingMemberId === selectedMemberForViews.id}
-                    onCheckedChange={async (checked) => {
-                      const next = buildNextPermissions(selectedMemberForViews, {
+                    onCheckedChange={(checked) => {
+                      setViewPermissionDraft((prev) => ({
+                        ...(prev || {}),
                         [item.key]: !!checked,
-                      } as Partial<WorkspacePermissions>);
-                      await handlePermissionChange(selectedMemberForViews.id, next);
-                      const fresh = currentWorkspace.members.find(
-                        (m) => m.id === selectedMemberForViews.id
-                      );
-                      if (fresh) {
-                        setSelectedMemberForViews(fresh);
-                      }
+                      }));
                     }}
                   />
                 </div>
               ))}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedMemberForViewsId(null)}
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={updatingMemberId === selectedMemberForViews.id}
+                  onClick={applyViewPermissionDraft}
+                >
+                  Apply
+                </Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

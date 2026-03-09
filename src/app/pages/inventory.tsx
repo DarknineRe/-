@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Search, Edit, Trash2, AlertCircle, Plus, FolderOpen } from "lucide-react";
+import { Search, Edit, Trash2, AlertCircle, Plus, FolderOpen, Minus } from "lucide-react";
 import type { Product } from "../context/data-context";
 import { EditProductDialog } from "../components/edit-product-dialog";
 import { AddProductDialog } from "../components/add-product-dialog";
@@ -45,12 +45,35 @@ export function Inventory() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [bubbleActionProductId, setBubbleActionProductId] = useState<string | null>(null);
 
   // Get unique categories
   const categories = ["ทั้งหมด", ...new Set(products.map((p) => p.category))];
   const productNames = ["ทั้งหมด", ...new Set(products.map((p) => p.name))];
 
   const workspaceOptions = workspaceMode === "category" ? categories : productNames;
+
+  const buildWorkspaceItems = (options: string[], mode: "category" | "product") =>
+    options.map((option) => {
+      const scopedProducts =
+        option === "ทั้งหมด"
+          ? products
+          : mode === "category"
+          ? products.filter((product) => product.category === option)
+          : products.filter((product) => product.name === option);
+
+      return {
+        name: option,
+        count: scopedProducts.length,
+        totalQuantity: scopedProducts.reduce(
+          (sum, product) => sum + product.quantity,
+          0
+        ),
+      };
+    });
+
+  const categoryWorkspaceItems = buildWorkspaceItems(categories, "category");
+  const productWorkspaceItems = buildWorkspaceItems(productNames, "product");
 
   const workspaceItems = workspaceOptions.map((option) => {
     const scopedProducts =
@@ -91,6 +114,22 @@ export function Inventory() {
     return { label: "มีสินค้า", variant: "default" as const };
   };
 
+  const adjustQuantityFromBubble = async (product: Product, delta: number) => {
+    if (!permissions.canEdit) return;
+    const nextQuantity = Math.max(0, product.quantity + delta);
+    if (nextQuantity === product.quantity) return;
+
+    setBubbleActionProductId(product.id);
+    try {
+      await updateProduct({
+        ...product,
+        quantity: nextQuantity,
+      });
+    } finally {
+      setBubbleActionProductId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -116,6 +155,9 @@ export function Inventory() {
         <p className="text-sm text-gray-600 mb-4">
           เลือกตามหมวดหมู่หรือชื่อสินค้า แล้วกดบับเบิลเพื่อเปิดดูรายการ
         </p>
+        <p className="text-xs text-gray-500 mb-3">
+          การกด +, -, หรือลบในบับเบิลสินค้า จะถูกบันทึกในประวัติและสามารถย้อนกลับได้
+        </p>
 
         <div className="mb-4">
           <Select
@@ -135,28 +177,117 @@ export function Inventory() {
           </Select>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          {workspaceItems.map((workspace) => {
-            const isActive = workspaceFilter === workspace.name;
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">ตามหมวดหมู่</p>
+            <div className="flex flex-wrap gap-3">
+              {categoryWorkspaceItems.map((workspace) => {
+                const isActive =
+                  workspaceMode === "category" && workspaceFilter === workspace.name;
 
-            return (
-              <button
-                key={workspace.name}
-                type="button"
-                onClick={() => setWorkspaceFilter(workspace.name)}
-                className={`rounded-full border px-4 py-3 text-left transition-all min-w-[180px] ${
-                  isActive
-                    ? "border-green-600 bg-green-600 text-white shadow"
-                    : "border-green-200 bg-green-50 text-gray-800 hover:border-green-400 hover:bg-green-100"
-                }`}
-              >
-                <p className="font-semibold leading-tight">{workspace.name}</p>
-                <p className="text-xs mt-1">
-                  {workspace.count.toLocaleString()} รายการ • {workspace.totalQuantity.toLocaleString()} หน่วย
-                </p>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={`category-${workspace.name}`}
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceMode("category");
+                      setWorkspaceFilter(workspace.name);
+                    }}
+                    className={`rounded-full border px-4 py-3 text-left transition-all min-w-[180px] ${
+                      isActive
+                        ? "border-green-600 bg-green-600 text-white shadow"
+                        : "border-green-200 bg-green-50 text-gray-800 hover:border-green-400 hover:bg-green-100"
+                    }`}
+                  >
+                    <p className="font-semibold leading-tight">{workspace.name}</p>
+                    <p className="text-xs mt-1">
+                      {workspace.count.toLocaleString()} รายการ • {workspace.totalQuantity.toLocaleString()} หน่วย
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">ตามชื่อสินค้า</p>
+            <div className="flex flex-wrap gap-3">
+              {productWorkspaceItems.map((workspace) => {
+                const isActive =
+                  workspaceMode === "product" && workspaceFilter === workspace.name;
+                const matchedProducts = products.filter((p) => p.name === workspace.name);
+                const product = matchedProducts.length === 1 ? matchedProducts[0] : null;
+                const isAll = workspace.name === "ทั้งหมด";
+
+                return (
+                  <button
+                    key={`product-${workspace.name}`}
+                    type="button"
+                    onClick={() => {
+                      setWorkspaceMode("product");
+                      setWorkspaceFilter(workspace.name);
+                    }}
+                    className={`rounded-full border px-4 py-3 text-left transition-all min-w-[180px] ${
+                      isActive
+                        ? "border-green-600 bg-green-600 text-white shadow"
+                        : "border-green-200 bg-green-50 text-gray-800 hover:border-green-400 hover:bg-green-100"
+                    }`}
+                  >
+                    <p className="font-semibold leading-tight">{workspace.name}</p>
+                    <p className="text-xs mt-1">
+                      {workspace.count.toLocaleString()} รายการ • {workspace.totalQuantity.toLocaleString()} หน่วย
+                    </p>
+                    {!isAll && permissions.canEdit && product && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={bubbleActionProductId === product.id || product.quantity <= 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            adjustQuantityFromBubble(product, -1);
+                          }}
+                          className="h-7 px-2"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={bubbleActionProductId === product.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            adjustQuantityFromBubble(product, 1);
+                          }}
+                          className="h-7 px-2"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={bubbleActionProductId === product.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingProductId(product.id);
+                          }}
+                          className="h-7 px-2"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    {!isAll && permissions.canEdit && !product && workspace.count > 1 && (
+                      <p className="text-[11px] mt-2 opacity-80">มีหลายรายการชื่อเดียวกัน</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </Card>
 
