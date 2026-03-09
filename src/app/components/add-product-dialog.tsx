@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useData } from "../context/data-context";
+import { useWorkspace } from "../context/workspace-context";
+import { API_BASE } from "../../api";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,10 @@ export function AddProductDialog({
   onOpenChange,
 }: AddProductDialogProps) {
   const { addProduct, products } = useData();
+  const { currentWorkspace } = useWorkspace();
+  const [marketTemplates, setMarketTemplates] = useState<
+    Array<{ name: string; category: string; unit: string; source: "market" | "inventory" }>
+  >([]);
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -51,8 +57,41 @@ export function AddProductDialog({
     harvestDate: "",
   });
 
+  useEffect(() => {
+    if (!open) return;
+
+    const loadMarketTemplates = async () => {
+      try {
+        const workspaceId = currentWorkspace?.id || "default";
+        const res = await fetch(
+          `${API_BASE}/api/market-prices/latest?workspace_id=${encodeURIComponent(workspaceId)}&limit=200`
+        );
+        if (!res.ok) {
+          setMarketTemplates([]);
+          return;
+        }
+
+        const rows = await res.json();
+        const mapped = (rows || [])
+          .map((row: any) => ({
+            name: String(row.product_name || row.productName || "").trim(),
+            category: "ผักสด",
+            unit: "กิโลกรัม",
+            source: "market" as const,
+          }))
+          .filter((item: { name: string }) => item.name.length > 0);
+
+        setMarketTemplates(mapped);
+      } catch {
+        setMarketTemplates([]);
+      }
+    };
+
+    loadMarketTemplates();
+  }, [open, currentWorkspace?.id]);
+
   const normalizedName = formData.name.trim().toLowerCase();
-  const productTemplates = products.reduce(
+  const inventoryTemplates = products.reduce(
     (acc, product) => {
       const key = `${product.name.trim().toLowerCase()}|${product.category}|${product.unit}`;
       if (!acc.seen.has(key)) {
@@ -61,15 +100,33 @@ export function AddProductDialog({
           name: product.name,
           category: product.category,
           unit: product.unit,
+          source: "inventory" as const,
         });
       }
       return acc;
     },
     {
       seen: new Set<string>(),
-      items: [] as Array<{ name: string; category: string; unit: string }>,
+      items: [] as Array<{
+        name: string;
+        category: string;
+        unit: string;
+        source: "market" | "inventory";
+      }>,
     }
   ).items;
+
+  const productTemplates = useMemo(() => {
+    const merged = [...inventoryTemplates, ...marketTemplates];
+    const seen = new Set<string>();
+
+    return merged.filter((item) => {
+      const key = `${item.name.trim().toLowerCase()}|${item.category}|${item.unit}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [inventoryTemplates, marketTemplates]);
 
   const nameSuggestions =
     normalizedName.length === 0
@@ -82,7 +139,12 @@ export function AddProductDialog({
     (item) => item.name.trim().toLowerCase() === normalizedName
   );
 
-  const applyTemplate = (template: { name: string; category: string; unit: string }) => {
+  const applyTemplate = (template: {
+    name: string;
+    category: string;
+    unit: string;
+    source: "market" | "inventory";
+  }) => {
     setFormData((prev) => ({
       ...prev,
       name: template.name,
@@ -154,7 +216,7 @@ export function AddProductDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="name">ชื่อสินค้า *</Label>
               <Input
                 id="name"
@@ -166,15 +228,18 @@ export function AddProductDialog({
                 placeholder="ระบุชื่อสินค้า"
               />
               {nameSuggestions.length > 0 && !hasExactMatch && (
-                <div className="rounded-md border border-green-200 bg-green-50 p-2 space-y-1 max-h-36 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-emerald-200 bg-white shadow-lg p-2 space-y-1 max-h-52 overflow-y-auto">
                   {nameSuggestions.map((item) => (
                     <button
-                      key={`${item.name}-${item.category}-${item.unit}`}
+                      key={`${item.name}-${item.category}-${item.unit}-${item.source}`}
                       type="button"
-                      className="w-full text-left text-sm rounded px-2 py-1 hover:bg-green-100"
+                      className="w-full text-left text-sm rounded-md px-2 py-2 hover:bg-emerald-50"
                       onClick={() => applyTemplate(item)}
                     >
-                      {item.name} • {item.category} • {item.unit}
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="text-xs text-gray-600">
+                        {item.category} • {item.unit} • {item.source === "market" ? "ราคาอ้างอิงกระทรวงพาณิชย์" : "ข้อมูลในสต็อก"}
+                      </p>
                     </button>
                   ))}
                 </div>
