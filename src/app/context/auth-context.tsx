@@ -6,15 +6,19 @@ interface User {
   name: string;
   email: string;
   photoUrl?: string;
+  phone?: string;
+  address?: string;
+  role?: string;
   loginMethod?: "email" | "google";
 }
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<{ requiresOtp: boolean; email: string; devOtp?: string }>;
+  verifyRegisterOtp: (email: string, otp: string) => Promise<void>;
   loginWithGoogle: (googleToken: string) => Promise<void>;
-  updateProfile: (data: { name: string; photoUrl?: string }) => Promise<void>;
+  updateProfile: (data: { name: string; photoUrl?: string; phone?: string; address?: string }) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -59,16 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(data.error || `Login failed (${response.status})`);
       }
 
-      // at this point `data` already contains the parsed body
-      const mockUser: User = {
+      const loggedInUser: User = {
         id: data.user.id,
         name: data.user.name,
         email: data.user.email,
+        phone: data.user.phone,
+        address: data.user.address,
+        role: data.user.role,
         loginMethod: "email"
       };
-      
-      setUser(mockUser);
-      localStorage.setItem("currentUser", JSON.stringify(mockUser));
+
+      setUser(loggedInUser);
+      localStorage.setItem("currentUser", JSON.stringify(loggedInUser));
     } catch (error: any) {
       throw new Error(error.message || 'Login failed');
     }
@@ -100,19 +106,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      const mockUser: User = {
-        id: data.user.id,
-        name: data.user.name,
-        email: data.user.email,
-        loginMethod: "email"
+      return {
+        requiresOtp: Boolean(data.requiresOtp),
+        email: data.email || email,
+        devOtp: data.devOtp,
       };
-      
-      setUser(mockUser);
-      localStorage.setItem("currentUser", JSON.stringify(mockUser));
     } catch (error: any) {
       const errorMessage = error?.message || 'Registration failed';
       console.error("Register error:", error);
       throw new Error(errorMessage);
+    }
+  };
+
+  const verifyRegisterOtp = async (email: string, otp: string) => {
+    try {
+      const base = import.meta.env.VITE_API_URL || API_BASE;
+      const response = await fetch(`${base}/api/auth/register/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'OTP verification failed');
+      }
+
+      const registeredUser: User = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        phone: data.user.phone,
+        address: data.user.address,
+        role: data.user.role,
+        loginMethod: "email"
+      };
+
+      setUser(registeredUser);
+      localStorage.setItem("currentUser", JSON.stringify(registeredUser));
+    } catch (error: any) {
+      throw new Error(error.message || 'OTP verification failed');
     }
   };
 
@@ -134,6 +167,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.user.id,
         name: data.user.name,
         email: data.user.email,
+        phone: data.user.phone,
+        address: data.user.address,
+        role: data.user.role,
         loginMethod: "google"
       };
       
@@ -144,12 +180,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateProfile = async (data: { name: string; photoUrl?: string }) => {
+  const updateProfile = async (data: { name: string; photoUrl?: string; phone?: string; address?: string }) => {
     if (user) {
       const updatedUser: User = {
         ...user,
         name: data.name,
         photoUrl: data.photoUrl,
+        phone: data.phone,
+        address: data.address,
       };
       setUser(updatedUser);
       localStorage.setItem("currentUser", JSON.stringify(updatedUser));
@@ -168,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         login,
         register,
+        verifyRegisterOtp,
         loginWithGoogle,
         updateProfile,
         logout,

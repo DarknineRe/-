@@ -12,6 +12,8 @@ import { Hub } from "./pages/hub";
 import { Profile } from "./pages/profile";
 import { PriceSearch } from "./pages/price-search";
 import { BuyerShop } from "./pages/buyer";
+import { CartPage } from "./pages/cart";
+import { ReceiptPage } from "./pages/receipt";
 
 export const router = createBrowserRouter([
   {
@@ -37,6 +39,14 @@ export const router = createBrowserRouter([
   {
     path: "/price-search",
     Component: PriceSearch,
+  },
+  {
+    path: "/cart",
+    Component: CartPage,
+  },
+  {
+    path: "/receipt/:receiptId",
+    Component: ReceiptPage,
   },
   {
     path: "/buyer",

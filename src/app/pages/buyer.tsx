@@ -8,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { toast } from "sonner";
 import { API_BASE } from "../../api";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
+import { addBuyerCartItem, getBuyerCart, getBuyerCartQuantity } from "../lib/buyer-cart";
 
 interface BuyerProduct {
   id: string;
@@ -28,9 +29,13 @@ export function BuyerShop() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(null);
-  const [cart, setCart] = useState<Map<string, number>>(new Map());
+  const [cartCount, setCartCount] = useState(0);
   const [products, setProducts] = useState<BuyerProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setCartCount(getBuyerCartQuantity());
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -147,15 +152,14 @@ export function BuyerShop() {
   );
 
   const handleAddToCart = (productId: string) => {
-    const newCart = new Map(cart);
-    newCart.set(productId, (newCart.get(productId) || 0) + 1);
-    setCart(newCart);
+    const nextItems = addBuyerCartItem(productId, 1);
+    setCartCount(getBuyerCartQuantity(nextItems));
     toast.success("เพิ่มลงตะกร้าแล้ว");
   };
 
-  const cartTotal = Array.from(cart.entries()).reduce((total, [productId, qty]) => {
-    const product = products.find((p) => p.id === productId);
-    return total + (product?.price || 0) * qty;
+  const cartTotal = getBuyerCart().reduce((total, item) => {
+    const product = products.find((p) => p.id === item.productId);
+    return total + (product?.price || 0) * item.quantity;
   }, 0);
 
   const totalQuantity = useMemo(
@@ -179,10 +183,10 @@ export function BuyerShop() {
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => navigate("/login")}>เลือก Buyer / Seller</Button>
-            <div className="text-sm">
+            <button type="button" onClick={() => navigate("/cart")} className="text-sm text-left">
               <span className="text-gray-600">ตะกร้า: </span>
-              <span className="font-bold text-green-600">{cart.size} รายการ</span>
-            </div>
+              <span className="font-bold text-green-600">{cartCount} รายการ</span>
+            </button>
             {cartTotal > 0 && (
               <Badge className="bg-green-600">฿{cartTotal.toFixed(2)}</Badge>
             )}

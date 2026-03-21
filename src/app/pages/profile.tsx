@@ -16,6 +16,8 @@ export function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [photoUrl, setPhotoUrl] = useState(user?.photoUrl || "");
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [address, setAddress] = useState(user?.address || "");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
@@ -26,7 +28,7 @@ export function Profile() {
 
     setIsLoading(true);
     try {
-      await updateProfile({ name, photoUrl });
+      await updateProfile({ name, photoUrl, phone, address });
       toast.success("บันทึกข้อมูลสำเร็จ!");
       setIsEditing(false);
     } catch (error) {
@@ -60,7 +62,7 @@ export function Profile() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate("/hub")}
+                onClick={() => navigate(-1)}
                 className="hover:bg-gray-100"
               >
                 <ArrowLeft className="h-5 w-5" />
@@ -183,6 +185,34 @@ export function Profile() {
                   </p>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="phone">เบอร์โทรศัพท์</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="phone"
+                      type="text"
+                      placeholder="08x-xxx-xxxx"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="pl-10"
+                      disabled={!isEditing || isLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">ที่อยู่เริ่มต้น</Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    disabled={!isEditing || isLoading}
+                  />
+                </div>
+
                 {isEditing && (
                   <div className="flex gap-2 pt-4">
                     <Button
@@ -200,6 +230,8 @@ export function Profile() {
                         setIsEditing(false);
                         setName(user?.name || "");
                         setPhotoUrl(user?.photoUrl || "");
+                        setPhone(user?.phone || "");
+                        setAddress(user?.address || "");
                       }}
                       disabled={isLoading}
                     >

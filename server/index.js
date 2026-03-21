@@ -6,6 +6,10 @@ const { fetchMarketPrice, fetchProductCatalog } = require('./market-price-servic
 const app = express();
 const port = 3001;
 
+const OTP_EXPIRE_MS = 5 * 60 * 1000;
+const loginOtpStore = new Map();
+const registerOtpStore = new Map();
+
 app.use(cors());
 app.use(express.json());
 
@@ -24,7 +28,7 @@ function generateWorkspaceCode() {
 }
 
 function isAllowedMarketProductId(productId) {
-    return /^P13(00[1-9]|0[1-8][0-9]|09[0-2])$/i.test(String(productId || ''));
+    return /^P\d{5}$/i.test(String(productId || ''));
 }
 
 function normalizeMarketProductName(name) {
@@ -676,6 +680,15 @@ app.put('/api/workspaces/:id/members/:memberId/permissions', async (req, res) =>
 
 // --- Authentication API ---
 
+function generateOtpCode() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function sendOtpByEmail(email, otpCode) {
+    // Placeholder email sender. Integrate SMTP provider later.
+    console.log(`[OTP] Send ${otpCode} to ${email}`);
+}
+
 // shared login handler used by both /api/auth/login and /api/login
 async function handleLogin(req, res) {
     try {
@@ -707,18 +720,52 @@ async function handleLogin(req, res) {
         }
 
         const user = users[0];
-        console.log(`[LOGIN] Success: user ${user.email} (id=${user.id})`);
+
         res.json({
             success: true,
             user: {
                 id: user.id.toString(),
                 name: user.name,
                 email: user.email,
-                role: user.role
-            }
+                role: user.role,
+            },
         });
     } catch (err) {
         console.error('[LOGIN] Error:', err.message, err.stack);
+        res.status(500).json({ error: err.message });
+    }
+}
+
+async function handleVerifyLoginOtp(req, res) {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
+            return res.status(400).json({ error: 'Email and otp are required' });
+        }
+
+        const key = String(email).toLowerCase();
+        const otpSession = loginOtpStore.get(key);
+
+        if (!otpSession) {
+            return res.status(400).json({ error: 'OTP session not found. Please login again.' });
+        }
+
+        if (Date.now() > otpSession.expiresAt) {
+            loginOtpStore.delete(key);
+            return res.status(400).json({ error: 'OTP expired. Please login again.' });
+        }
+
+        if (String(otpSession.code) !== String(otp).trim()) {
+            return res.status(401).json({ error: 'Invalid OTP code' });
+        }
+
+        loginOtpStore.delete(key);
+        return res.json({
+            success: true,
+            user: otpSession.user,
+        });
+    } catch (err) {
+        console.error('[LOGIN OTP VERIFY] Error:', err.message, err.stack);
         res.status(500).json({ error: err.message });
     }
 }
@@ -752,33 +799,96 @@ async function handleRegister(req, res) {
             return res.status(409).json({ error: 'Email already exists' });
         }
 
-        // Insert new user and return generated id
-        let insertResult;
-        try {
-            insertResult = await pool.query(
-                'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
-                [name, email, password, 'farmer']
-            );
-        } catch (dbErr) {
-            console.error('[REGISTER] Insert failed:', dbErr.message);
-            throw dbErr;
+        const otpCode = generateOtpCode();
+        const expiresAt = Date.now() + OTP_EXPIRE_MS;
+
+        registerOtpStore.set(String(email).toLowerCase(), {
+            code: otpCode,
+            expiresAt,
+            pendingUser: {
+                name,
+                email,
+                password,
+                role: 'farmer',
+            },
+        });
+
+        sendOtpByEmail(email, otpCode);
+        console.log(`[REGISTER] OTP requested for ${email}`);
+
+        const response = {
+            success: true,
+            requiresOtp: true,
+            email,
+            message: 'OTP sent to your email',
+        };
+
+        if (process.env.NODE_ENV !== 'production') {
+            response.devOtp = otpCode;
         }
 
-        const newUserId = insertResult.rows[0].id;
-        console.log(`[REGISTER] Success: new user ${email} (id=${newUserId})`);
+        res.status(200).json(response);
+    } catch (err) {
+        console.error('[REGISTER] Error:', err.message, err.stack);
+        res.status(500).json({ error: err.message });
+    }
+}
 
-        res.status(201).json({
+async function handleVerifyRegisterOtp(req, res) {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
+            return res.status(400).json({ error: 'Email and otp are required' });
+        }
+
+        const key = String(email).toLowerCase();
+        const otpSession = registerOtpStore.get(key);
+
+        if (!otpSession) {
+            return res.status(400).json({ error: 'OTP session not found. Please register again.' });
+        }
+
+        if (Date.now() > otpSession.expiresAt) {
+            registerOtpStore.delete(key);
+            return res.status(400).json({ error: 'OTP expired. Please register again.' });
+        }
+
+        if (String(otpSession.code) !== String(otp).trim()) {
+            return res.status(401).json({ error: 'Invalid OTP code' });
+        }
+
+        const { pendingUser } = otpSession;
+
+        const { rows: existingUsers } = await pool.query(
+            'SELECT id FROM users WHERE email = $1',
+            [pendingUser.email]
+        );
+
+        if (existingUsers.length > 0) {
+            registerOtpStore.delete(key);
+            return res.status(409).json({ error: 'Email already exists' });
+        }
+
+        const insertResult = await pool.query(
+            'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
+            [pendingUser.name, pendingUser.email, pendingUser.password, pendingUser.role]
+        );
+
+        registerOtpStore.delete(key);
+        const newUserId = insertResult.rows[0].id;
+
+        return res.status(201).json({
             success: true,
             message: 'User registered successfully',
             user: {
                 id: newUserId.toString(),
-                name,
-                email,
-                role: 'farmer'
-            }
+                name: pendingUser.name,
+                email: pendingUser.email,
+                role: pendingUser.role,
+            },
         });
     } catch (err) {
-        console.error('[REGISTER] Error:', err.message, err.stack);
+        console.error('[REGISTER OTP VERIFY] Error:', err.message, err.stack);
         res.status(500).json({ error: err.message });
     }
 }
@@ -786,9 +896,13 @@ async function handleRegister(req, res) {
 // mount both canonical and alias routes
 app.post('/api/auth/login', handleLogin);
 app.post('/api/login', handleLogin);
+app.post('/api/auth/login/verify-otp', handleVerifyLoginOtp);
+app.post('/api/login/verify-otp', handleVerifyLoginOtp);
 
 app.post('/api/auth/register', handleRegister);
 app.post('/api/register', handleRegister);
+app.post('/api/auth/register/verify-otp', handleVerifyRegisterOtp);
+app.post('/api/register/verify-otp', handleVerifyRegisterOtp);
 
 /**
  * Check if user exists
@@ -1387,7 +1501,7 @@ app.get('/api/market-prices', async (req, res) => {
             });
         }
         if (!isAllowedMarketProductId(product_id)) {
-            return res.status(400).json({ error: 'Only vegetable product IDs are allowed (P13001-P13092)' });
+            return res.status(400).json({ error: 'Invalid product ID format. Expected values like P11012' });
         }
         
         const priceData = await fetchMarketPrice(product_id, from_date, to_date);
@@ -1409,7 +1523,7 @@ app.get('/api/market-prices/today', async (req, res) => {
             return res.status(400).json({ error: 'Missing product_id parameter' });
         }
         if (!isAllowedMarketProductId(product_id)) {
-            return res.status(400).json({ error: 'Only vegetable product IDs are allowed (P13001-P13092)' });
+            return res.status(400).json({ error: 'Invalid product ID format. Expected values like P11012' });
         }
         
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -1430,7 +1544,7 @@ app.get('/api/market-prices/history/:product_id', async (req, res) => {
         const { from_date, to_date } = req.query;
 
         if (!isAllowedMarketProductId(product_id)) {
-            return res.status(400).json({ error: 'Only vegetable product IDs are allowed (P13001-P13092)' });
+            return res.status(400).json({ error: 'Invalid product ID format. Expected values like P11012' });
         }
 
         const end = String(to_date || new Date().toISOString().split('T')[0]);

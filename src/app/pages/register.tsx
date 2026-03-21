@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate, Link } from "react-router";
+import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from "../context/auth-context";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -9,13 +10,20 @@ import { Leaf, Lock, Mail, User as UserIcon, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 export function Register() {
+  const location = useLocation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpStep, setOtpStep] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { register, loginWithGoogle } = useAuth();
+  const { register, verifyRegisterOtp, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const mode = params.get("mode") === "buyer" ? "buyer" : "seller";
+  const redirectTo = params.get("redirect") || (mode === "buyer" ? "/cart" : "/hub");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,9 +45,19 @@ export function Register() {
 
     setIsLoading(true);
     try {
-      await register(name, email, password);
+      const result = await register(name, email, password);
+      if (result.requiresOtp) {
+        setOtpEmail(result.email || email);
+        setOtpStep(true);
+        toast.success("ส่ง OTP ไปที่อีเมลแล้ว");
+        if (result.devOtp) {
+          toast.info(`OTP สำหรับทดสอบ: ${result.devOtp}`);
+        }
+        return;
+      }
+
       toast.success("สมัครสมาชิกสำเร็จ!");
-      navigate("/hub");
+      navigate(redirectTo);
     } catch (error: any) {
       const errorMessage = error?.message || "สมัครสมาชิกไม่สำเร็จ";
       toast.error(errorMessage);
@@ -49,25 +67,49 @@ export function Register() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim()) {
+      toast.error("กรุณากรอกรหัส OTP");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await loginWithGoogle();
-      toast.success("เข้าสู่ระบบด้วย Google สำเร็จ!");
-      navigate("/hub");
-    } catch (error) {
-      toast.error("เข้าสู่ระบบไม่สำเร็จ");
+      await verifyRegisterOtp(otpEmail, otp.trim());
+      toast.success("ยืนยัน OTP สำเร็จ");
+      navigate(redirectTo);
+    } catch (error: any) {
+      toast.error(error.message || "OTP ไม่ถูกต้อง");
     } finally {
       setIsLoading(false);
     }
   };
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (response) => {
+      try {
+        setIsLoading(true);
+        await loginWithGoogle(response.access_token);
+        toast.success("เข้าสู่ระบบด้วย Google สำเร็จ!");
+        navigate(redirectTo);
+      } catch (error) {
+        toast.error("เข้าสู่ระบบไม่สำเร็จ");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    onError: () => {
+      toast.error("เข้าสู่ระบบด้วย Google ล้มเหลว");
+    },
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8">
         {/* Back Button */}
         <Link 
-          to="/login" 
+          to={`/login?mode=${mode}&redirect=${encodeURIComponent(redirectTo)}`} 
           className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -79,13 +121,58 @@ export function Register() {
             <Leaf className="h-8 w-8 text-green-600" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            สมัครสมาชิก
+            {mode === "buyer" ? "สมัครสมาชิกผู้ซื้อ" : "สมัครสมาชิก"}
           </h1>
           <p className="text-gray-600">
-            สร้างบัญชีใหม่เพื่อเริ่มจัดการผลผลิตทางการเกษตร
+            {mode === "buyer"
+              ? "สมัครสมาชิกเพื่อบันทึกโปรไฟล์และยืนยันการสั่งซื้อ"
+              : "สร้างบัญชีใหม่เพื่อเริ่มจัดการผลผลิตทางการเกษตร"}
           </p>
         </div>
 
+        {otpStep ? (
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            เราส่งรหัส OTP ไปที่อีเมล <span className="font-semibold">{otpEmail}</span> แล้ว
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="otp">รหัส OTP</Label>
+            <Input
+              id="otp"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="กรอกรหัส 6 หลัก"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOtpStep(false);
+                setOtp("");
+                setOtpEmail("");
+              }}
+              disabled={isLoading}
+            >
+              กลับ
+            </Button>
+            <Button
+              type="submit"
+              className="bg-green-600 hover:bg-green-700"
+              disabled={isLoading}
+            >
+              {isLoading ? "กำลังยืนยัน..." : "ยืนยัน OTP"}
+            </Button>
+          </div>
+        </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">ชื่อ-นามสกุล</Label>
@@ -157,9 +244,10 @@ export function Register() {
             className="w-full bg-green-600 hover:bg-green-700"
             disabled={isLoading}
           >
-            {isLoading ? "กำลังสมัครสมาชิก..." : "สมัครสมาชิก"}
+            {isLoading ? "กำลังส่ง OTP..." : "สมัครสมาชิก"}
           </Button>
         </form>
+        )}
 
         <div className="mt-6 relative">
           <div className="absolute inset-0 flex items-center">
@@ -174,7 +262,7 @@ export function Register() {
           type="button"
           variant="outline"
           className="w-full mt-4 flex items-center justify-center gap-2"
-          onClick={handleGoogleLogin}
+          onClick={() => googleLogin()}
           disabled={isLoading}
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -202,7 +290,7 @@ export function Register() {
           <p className="text-sm text-gray-600">
             มีบัญชีอยู่แล้ว?{" "}
             <Link 
-              to="/login" 
+              to={`/login?mode=${mode}&redirect=${encodeURIComponent(redirectTo)}`} 
               className="text-green-600 hover:text-green-700 font-medium"
             >
               เข้าสู่ระบบ

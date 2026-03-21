@@ -5,6 +5,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Calendar, Search, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { API_BASE } from "../../api";
 import {
   Select,
   SelectContent,
@@ -24,11 +25,12 @@ import {
 interface PriceData {
   product_id: string;
   product_name: string;
-  market_name: string;
-  price: number;
-  currency: string;
+  market_name?: string;
+  avg_price?: number;
+  min_price?: number;
+  max_price?: number;
   date: string;
-  unit: string;
+  unit?: string;
 }
 
 const PRODUCTS = [
@@ -59,15 +61,17 @@ export function PriceSearch() {
 
     setIsLoading(true);
     try {
-      const url = `https://data.moc.go.th/OpenData/GISProductPrice?product_id=${productId}&from_date=${fromDate}&to_date=${toDate}&task=search`;
+      const base = import.meta.env.VITE_API_URL || API_BASE;
+      const url = `${base}/api/market-prices/history/${productId}?from_date=${fromDate}&to_date=${toDate}`;
       
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error("ไม่สามารถดึงข้อมูลราคาได้");
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error || error?.message || "ไม่สามารถดึงข้อมูลราคาได้");
       }
 
       const data = await response.json();
-      setSearchResults(Array.isArray(data) ? data : data.data || []);
+      setSearchResults(Array.isArray(data) ? data : []);
       setHasSearched(true);
       
       if (Array.isArray(data) && data.length === 0) {
@@ -94,10 +98,10 @@ export function PriceSearch() {
       ...searchResults.map((item) => [
         item.product_id,
         item.product_name,
-        item.market_name,
-        item.price,
-        item.currency,
-        item.unit,
+        item.market_name || "MOC Realtime",
+        item.avg_price ?? item.min_price ?? item.max_price ?? 0,
+        "THB",
+        item.unit || "กก.",
         item.date,
       ]),
     ]
@@ -215,11 +219,11 @@ export function PriceSearch() {
                   {searchResults.map((item, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-medium">{item.product_name}</TableCell>
-                      <TableCell>{item.market_name}</TableCell>
+                      <TableCell>{item.market_name || "MOC Realtime"}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        ฿{item.price?.toFixed(2) || "N/A"}
+                        ฿{(item.avg_price ?? item.min_price ?? item.max_price)?.toFixed(2) || "N/A"}
                       </TableCell>
-                      <TableCell>{item.unit}</TableCell>
+                      <TableCell>{item.unit || "กก."}</TableCell>
                       <TableCell>{item.date}</TableCell>
                     </TableRow>
                   ))}

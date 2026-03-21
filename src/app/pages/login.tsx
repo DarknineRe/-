@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, Link } from "react-router";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from "../context/auth-context";
 import { Card } from "../components/ui/card";
@@ -10,19 +10,27 @@ import { Leaf, Lock, Mail, ShoppingBag, Store } from "lucide-react";
 import { toast } from "sonner";
 
 export function Login() {
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<"buyer" | "seller">("seller");
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const requestedMode = params.get("mode") === "buyer" ? "buyer" : "seller";
+  const redirectTo = params.get("redirect") || (requestedMode === "buyer" ? "/cart" : "/hub");
+  const [selectedMode, setSelectedMode] = useState<"buyer" | "seller">(requestedMode);
+
+  useEffect(() => {
+    setSelectedMode(requestedMode);
+  }, [requestedMode]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem("currentUser");
     if (savedUser) {
-      navigate("/hub");
+      navigate(redirectTo);
     }
-  }, [navigate]);
+  }, [navigate, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +44,7 @@ export function Login() {
     try {
       await login(email, password);
       toast.success("เข้าสู่ระบบสำเร็จ!");
-      navigate("/hub");
+      navigate(redirectTo);
     } catch (error: any) {
       toast.error(error.message || "เข้าสู่ระบบไม่สำเร็จ");
     } finally {
@@ -50,7 +58,7 @@ export function Login() {
         setIsLoading(true);
         await loginWithGoogle(response.access_token);
         toast.success("เข้าสู่ระบบด้วย Google สำเร็จ!");
-        navigate("/hub");
+        navigate(redirectTo);
       } catch (error: any) {
         toast.error(error.message || "เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
       } finally {
@@ -117,6 +125,14 @@ export function Login() {
             >
               ไปหน้าผู้ซื้อ
             </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" onClick={() => navigate(`/login?mode=buyer&redirect=${encodeURIComponent("/cart")}`)}>
+                เข้าสู่ระบบผู้ซื้อ
+              </Button>
+              <Button type="button" variant="outline" onClick={() => navigate(`/register?mode=buyer&redirect=${encodeURIComponent("/cart")}`)}>
+                สมัครผู้ซื้อ
+              </Button>
+            </div>
           </div>
         ) : (
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
@@ -205,7 +221,7 @@ export function Login() {
           <p className="text-sm text-gray-600">
             ยังไม่มีบัญชี?{" "}
             <Link 
-              to="/register" 
+              to={`/register?mode=${selectedMode}&redirect=${encodeURIComponent(redirectTo)}`} 
               className="text-green-600 hover:text-green-700 font-medium"
             >
               สมัครสมาชิก
