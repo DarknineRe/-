@@ -1,15 +1,12 @@
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, redirect } from "react-router";
 import { Layout } from "./components/layout";
 import { ProtectedLayout } from "./components/protected-layout";
 import { HubProtectedLayout } from "./components/hub-protected-layout";
 import { Marketplace } from "./pages/marketplace";
-import { RoleHome } from "./pages/role-home";
+import { HomeRouter } from "./pages/home-router";
 import { Inventory } from "./pages/inventory";
 import { InventorySummary } from "./pages/inventory-summary";
 import { PlantingCalendar } from "./pages/planting-calendar";
-import { PriceAnalysis } from "./pages/price-analysis";
-import { PriceComparison } from "./pages/price-comparison";
-import { Recommendations } from "./pages/recommendations";
 import { ActivityLog } from "./pages/activity-log";
 import { Members } from "./pages/members";
 import { Login } from "./pages/login";
@@ -38,16 +35,17 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: RoleHome },
+      { index: true, Component: HomeRouter },
       { path: "marketplace", Component: Marketplace },
       { path: "inventory", Component: Inventory },
       { path: "summary", Component: InventorySummary },
       { path: "calendar", Component: PlantingCalendar },
-      { path: "analysis", Component: PriceAnalysis },
-      { path: "price-comparison", Component: PriceComparison },
-      { path: "recommendations", Component: Recommendations },
       { path: "members", Component: Members },
       { path: "activity", Component: ActivityLog },
     ],
+  },
+  {
+    path: "*",
+    loader: () => redirect("/"),
   },
 ]);

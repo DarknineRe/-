@@ -63,6 +63,7 @@ export function Members() {
   const userPermissions = getUserPermissions();
   const isOwner = userRole === "owner";
   const canManagePermissions = isOwner || userPermissions.canManagePermissions;
+  const employees = currentWorkspace?.members.filter((m) => m.role === "employee") || [];
   const merchants = employees.filter((member) => member.canAdd);
   const buyers = employees.filter((member) => !member.canAdd);
 
@@ -149,7 +150,6 @@ export function Members() {
   }
 
   const owner = currentWorkspace.members.find((m) => m.role === "owner");
-  const employees = currentWorkspace.members.filter((m) => m.role === "employee");
   const selectedMemberForViews = selectedMemberForViewsId
     ? currentWorkspace.members.find((m) => m.id === selectedMemberForViewsId) || null
     : null;
