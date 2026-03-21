@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { Package, Calendar, TrendingUp, BarChart3, Menu, Lightbulb, ClipboardList, BarChart2, User, Users, Building2, LogOut, DollarSign } from "lucide-react";
+import { Package, Calendar, TrendingUp, BarChart3, Menu, Lightbulb, ClipboardList, BarChart2, User, Users, Building2, LogOut, DollarSign, Store } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { useState, useEffect } from "react";
@@ -15,24 +15,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+type RoleMode = "admin" | "merchant" | "buyer";
 
 const navItems = [
-  { path: "/", label: "ภาพรวม", icon: BarChart3, permissionKey: "viewDashboard" as const },
-  { path: "/inventory", label: "จัดการสต็อก", icon: Package, permissionKey: "viewInventory" as const },
-  { path: "/summary", label: "สรุปสต็อก", icon: BarChart2, permissionKey: "viewSummary" as const },
-  { path: "/calendar", label: "ปฏิทินการปลูก", icon: Calendar, permissionKey: "viewCalendar" as const },
-  { path: "/analysis", label: "วิเคราะห์ราคา", icon: TrendingUp, permissionKey: "viewAnalysis" as const },
-  { path: "/price-comparison", label: "เปรียบเทียบราคา", icon: DollarSign, permissionKey: "viewPriceComparison" as const },
-  { path: "/recommendations", label: "คำแนะนำ", icon: Lightbulb, permissionKey: "viewRecommendations" as const },
-  { path: "/members", label: "สมาชิก", icon: Users, permissionKey: "viewMembers" as const },
-  { path: "/activity", label: "ประวัติการเปลี่ยนแปลง", icon: ClipboardList, permissionKey: "viewActivity" as const },
+  { path: "/", label: "ภาพรวม", icon: BarChart3, permissionKey: "viewDashboard" as const, audience: ["admin", "merchant", "buyer"] as RoleMode[] },
+  { path: "/marketplace", label: "ตลาดกลาง", icon: Store, permissionKey: "viewInventory" as const, audience: ["admin", "merchant", "buyer"] as RoleMode[] },
+  { path: "/inventory", label: "จัดการสต็อก", icon: Package, permissionKey: "viewInventory" as const, audience: ["admin", "merchant"] as RoleMode[] },
+  { path: "/summary", label: "สรุปสต็อก", icon: BarChart2, permissionKey: "viewSummary" as const, audience: ["admin", "merchant"] as RoleMode[] },
+  { path: "/calendar", label: "ปฏิทินการปลูก", icon: Calendar, permissionKey: "viewCalendar" as const, audience: ["admin", "merchant"] as RoleMode[] },
+  { path: "/analysis", label: "วิเคราะห์ราคา", icon: TrendingUp, permissionKey: "viewAnalysis" as const, audience: ["admin", "merchant"] as RoleMode[] },
+  { path: "/price-comparison", label: "เปรียบเทียบราคา", icon: DollarSign, permissionKey: "viewPriceComparison" as const, audience: ["admin", "merchant", "buyer"] as RoleMode[] },
+  { path: "/recommendations", label: "คำแนะนำ", icon: Lightbulb, permissionKey: "viewRecommendations" as const, audience: ["admin", "merchant"] as RoleMode[] },
+  { path: "/members", label: "สมาชิก", icon: Users, permissionKey: "viewMembers" as const, audience: ["admin"] as RoleMode[] },
+  { path: "/activity", label: "ประวัติการเปลี่ยนแปลง", icon: ClipboardList, permissionKey: "viewActivity" as const, audience: ["admin", "merchant"] as RoleMode[] },
 ];
 
 export function Layout() {
@@ -43,10 +38,29 @@ export function Layout() {
   const { user, logout, isAuthenticated } = useAuth();
   const userRole = getUserRole();
   const permissions = getUserPermissions();
+  const roleLabel =
+    userRole === "owner"
+      ? "Admin"
+      : permissions.canAdd
+      ? "ผู้ค้า"
+      : "ผู้ซื้อ";
+
+  const roleMode: RoleMode =
+    userRole === "owner" ? "admin" : permissions.canAdd ? "merchant" : "buyer";
 
   const accessibleNavItems = navItems.filter(
-    (item) => permissions.canView && permissions[item.permissionKey]
+    (item) =>
+      permissions.canView &&
+      permissions[item.permissionKey] &&
+      item.audience.includes(roleMode)
   );
+
+  const roleSubtitle =
+    roleMode === "buyer"
+      ? "เลือกซื้อและเปรียบเทียบราคาจากผู้ค้าในตลาดกลาง"
+      : roleMode === "merchant"
+      ? "จัดการสต็อกของร้านคุณและตั้งราคาเพื่อขาย"
+      : "ดูภาพรวม จัดการผู้ค้า และกำหนดสิทธิ์ผู้ใช้งาน";
 
   // Redirect if not authenticated or no workspace
   useEffect(() => {
@@ -141,7 +155,7 @@ export function Layout() {
                   ระบบจัดการผลผลิตทางการเกษตร
                 </h1>
                 <p className="text-xs lg:text-sm text-gray-600">
-                  วางแผนการเพาะปลูก วิเคราะห์ราคา และจัดการสต็อก
+                  {roleSubtitle}
                 </p>
               </div>
             </div>
@@ -157,7 +171,7 @@ export function Layout() {
                     userRole === "owner" ? "bg-green-600" : "bg-blue-600"
                   }
                 >
-                  {userRole === "owner" ? "Owner" : "Employee"}
+                  {roleLabel}
                 </Badge>
               </div>
               <Button

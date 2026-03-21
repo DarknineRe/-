@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db');
-const { fetchMarketPrice, PRODUCT_MAP } = require('./market-price-service');
-const priceScheduler = require('./market-price-scheduler');
+const { fetchMarketPrice, fetchProductCatalog } = require('./market-price-service');
 
 const app = express();
 const port = 3001;
@@ -34,6 +33,128 @@ function normalizeMarketProductName(name) {
         .replace(/\s+(คละ|คัด)(?=\s*\(|$)/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+const REALTIME_CACHE_TTL_MS = 5 * 60 * 1000;
+const realtimePriceCache = new Map();
+const realtimeCatalogCache = {
+    expiresAt: 0,
+    products: [],
+};
+
+function formatDateKey(date) {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function listDateRange(fromDate, toDate, maxDays = 45) {
+    const from = new Date(`${fromDate}T00:00:00.000Z`);
+    const to = new Date(`${toDate}T00:00:00.000Z`);
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        throw new Error('Invalid date format, expected YYYY-MM-DD');
+    }
+    if (from > to) {
+        throw new Error('from_date must be earlier than or equal to to_date');
+    }
+
+    const days = [];
+    const cursor = new Date(from);
+    while (cursor <= to) {
+        days.push(formatDateKey(cursor));
+        if (days.length > maxDays) {
+            throw new Error(`Date range too large. Maximum ${maxDays} days per request`);
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return days;
+}
+
+async function runWithConcurrency(items, concurrency, worker) {
+    const safeConcurrency = Math.max(1, Math.min(concurrency || 1, items.length || 1));
+    const results = [];
+    let index = 0;
+
+    async function runner() {
+        while (true) {
+            const current = index;
+            index += 1;
+            if (current >= items.length) return;
+            const value = await worker(items[current], current);
+            if (value !== null && value !== undefined) {
+                results.push(value);
+            }
+        }
+    }
+
+    await Promise.all(Array.from({ length: safeConcurrency }, () => runner()));
+    return results;
+}
+
+async function getRealtimePrice(productId, fromDate, toDate) {
+    const key = `${productId}|${fromDate}|${toDate}`;
+    const cached = realtimePriceCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.value;
+    }
+
+    const value = await fetchMarketPrice(productId, fromDate, toDate);
+    const normalized = {
+        ...value,
+        productName: normalizeMarketProductName(value?.productName || ''),
+    };
+
+    realtimePriceCache.set(key, {
+        expiresAt: Date.now() + REALTIME_CACHE_TTL_MS,
+        value: normalized,
+    });
+
+    return normalized;
+}
+
+async function getTrackedMarketProducts(limit = 30) {
+    const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 92) : 30;
+    if (realtimeCatalogCache.expiresAt > Date.now() && realtimeCatalogCache.products.length > 0) {
+        return realtimeCatalogCache.products.slice(0, safeLimit);
+    }
+
+    const generated = Array.from({ length: 92 }, (_, i) => {
+        const sequence = String(i + 1).padStart(3, '0');
+        return {
+            id: `P13${sequence}`,
+            name: `P13${sequence}`,
+        };
+    });
+
+    let catalog = [];
+    try {
+        catalog = await fetchProductCatalog(120);
+    } catch {
+        catalog = [];
+    }
+
+    const combined = [...catalog, ...generated]
+        .filter((item) => item?.id && isAllowedMarketProductId(item.id))
+        .map((item) => ({
+            id: String(item.id).toUpperCase(),
+            name: normalizeMarketProductName(item.name || item.id),
+        }));
+
+    const deduped = [];
+    const seen = new Set();
+    for (const item of combined) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        deduped.push(item);
+    }
+
+    realtimeCatalogCache.expiresAt = Date.now() + REALTIME_CACHE_TTL_MS;
+    realtimeCatalogCache.products = deduped;
+
+    return deduped.slice(0, safeLimit);
 }
 
 async function generateUniqueWorkspaceCode() {
@@ -384,8 +505,6 @@ app.delete('/api/workspaces/:id', async (req, res) => {
 
         await client.query('DELETE FROM products WHERE workspace_id = $1', [workspaceId]);
         await client.query('DELETE FROM schedules WHERE workspace_id = $1', [workspaceId]);
-        await client.query('DELETE FROM price_history WHERE workspace_id = $1', [workspaceId]);
-        await client.query('DELETE FROM market_prices WHERE workspace_id = $1', [workspaceId]);
         await client.query('DELETE FROM activity_logs WHERE workspace_id = $1', [workspaceId]);
 
         await client.query('DELETE FROM workspace_members WHERE workspace_id = $1', [workspaceId]);
@@ -798,20 +917,48 @@ app.post('/api/products', async (req, res) => {
     try {
         const workspaceId = requireWorkspaceId(req, res);
         if (!workspaceId) return;
-        let { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        let {
+            name,
+            category,
+            quantity,
+            unit,
+            price,
+            sellerId,
+            sellerName,
+            minStock,
+            harvestDate,
+            lastUpdated,
+        } = req.body;
         // enforce non-null minStock; default to 0 if missing or null
         if (minStock === undefined || minStock === null) {
             minStock = 0;
         }
+        if (price === undefined || price === null || Number.isNaN(Number(price))) {
+            price = 0;
+        }
+        if (!sellerId || !sellerName) {
+            return res.status(400).json({ error: 'sellerId and sellerName are required' });
+        }
         const id = Date.now().toString();
         const insertSql = `
-            INSERT INTO products (id, workspace_id, name, category, quantity, unit, minStock, harvestDate, lastUpdated)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO products (id, workspace_id, name, category, quantity, unit, price, seller_id, seller_name, minStock, harvestDate, lastUpdated)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING *
         `;
 
         const insertResult = await pool.query(insertSql, [
-            id, workspaceId, name, category, quantity, unit, minStock, harvestDate, lastUpdated
+            id,
+            workspaceId,
+            name,
+            category,
+            quantity,
+            unit,
+            Number(price),
+            String(sellerId),
+            String(sellerName),
+            minStock,
+            harvestDate,
+            lastUpdated,
         ]);
         res.status(201).json(insertResult.rows[0]);
     } catch (err) {
@@ -823,19 +970,47 @@ app.put('/api/products/:id', async (req, res) => {
     try {
         const workspaceId = requireWorkspaceId(req, res);
         if (!workspaceId) return;
-        let { name, category, quantity, unit, minStock, harvestDate, lastUpdated } = req.body;
+        let {
+            name,
+            category,
+            quantity,
+            unit,
+            price,
+            sellerId,
+            sellerName,
+            minStock,
+            harvestDate,
+            lastUpdated,
+        } = req.body;
         if (minStock === undefined || minStock === null) {
             minStock = 0;
         }
+        if (price === undefined || price === null || Number.isNaN(Number(price))) {
+            price = 0;
+        }
+        if (!sellerId || !sellerName) {
+            return res.status(400).json({ error: 'sellerId and sellerName are required' });
+        }
         const sql = `
             UPDATE products
-            SET name=$1, category=$2, quantity=$3, unit=$4, minStock=$5, harvestDate=$6, lastUpdated=$7
-            WHERE id=$8 AND workspace_id=$9
+            SET name=$1, category=$2, quantity=$3, unit=$4, price=$5, seller_id=$6, seller_name=$7, minStock=$8, harvestDate=$9, lastUpdated=$10
+            WHERE id=$11 AND workspace_id=$12
             RETURNING *
         `;
 
         const result = await pool.query(sql, [
-            name, category, quantity, unit, minStock, harvestDate, lastUpdated, req.params.id, workspaceId
+            name,
+            category,
+            quantity,
+            unit,
+            Number(price),
+            String(sellerId),
+            String(sellerName),
+            minStock,
+            harvestDate,
+            lastUpdated,
+            req.params.id,
+            workspaceId,
         ]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Product not found in this workspace' });
@@ -931,111 +1106,52 @@ app.delete('/api/schedules/:id', async (req, res) => {
 
 app.get('/api/price-history', async (req, res) => {
     try {
-        const workspaceId = requireWorkspaceId(req, res);
-        if (!workspaceId) return;
+        const daysParam = Number(req.query.days || 14);
+        const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 30) : 14;
+        const productLimitParam = Number(req.query.product_limit || 12);
+        const productLimit = Number.isFinite(productLimitParam) && productLimitParam > 0
+            ? Math.min(productLimitParam, 20)
+            : 12;
 
-        // Source of truth: normalized market_prices table
-        const marketPriceSql = `
-            SELECT period,
-                 normalized_name AS product_name,
-                 AVG(avg_price)::float8 AS avg_price,
-                 AVG(min_price)::float8 AS min_price,
-                 AVG(max_price)::float8 AS max_price
-             FROM (
-                SELECT to_char(date, 'YYYY-MM-DD') AS period,
-                       regexp_replace(
-                         regexp_replace(btrim(product_name), '\\s*\\(\\s*บาท\\s*\\/\\s*กก\\.?\\s*\\)\\s*', ' ', 'gi'),
-                         '\\s+(คละ|คัด)(?=\\s*\\(|$)',
-                         '',
-                         'g'
-                       ) AS normalized_name,
-                  avg_price,
-                  min_price,
-                  max_price
-              FROM market_prices
-              WHERE workspace_id = $1
-                AND product_id ~ '^P13(00[1-9]|0[1-8][0-9]|09[0-2])$'
-                AND product_name IS NOT NULL
-                AND btrim(product_name) <> ''
-             ) filtered
-             WHERE normalized_name <> ''
-             GROUP BY period, normalized_name
-             ORDER BY period ASC
-        `;
-        let { rows: marketRows } = await pool.query(marketPriceSql, [workspaceId]);
+        const end = new Date();
+        const start = new Date();
+        start.setUTCDate(end.getUTCDate() - (days - 1));
 
-        if (marketRows.length === 0 && workspaceId !== 'default') {
-            const fallbackResult = await pool.query(marketPriceSql, ['default']);
-            marketRows = fallbackResult.rows;
-        }
+        const dateKeys = listDateRange(formatDateKey(start), formatDateKey(end), 30);
+        const products = await getTrackedMarketProducts(productLimit);
 
-        if (marketRows.length === 0) {
-            return res.json([]);
-        }
+        const grouped = new Map(dateKeys.map((date) => [date, { date }]));
 
-        const grouped = new Map();
+        await runWithConcurrency(products, 4, async (product) => {
+            const dailyRows = await runWithConcurrency(dateKeys, 5, async (date) => {
+                try {
+                    const price = await getRealtimePrice(product.id, date, date);
+                    if (!Number.isFinite(price?.avgPrice)) return null;
+                    return {
+                        date,
+                        productName: normalizeMarketProductName(price.productName || product.name || product.id),
+                        minPrice: Number.isFinite(price.minPrice) ? Number(price.minPrice) : Number(price.avgPrice),
+                        maxPrice: Number.isFinite(price.maxPrice) ? Number(price.maxPrice) : Number(price.avgPrice),
+                        avgPrice: Number(price.avgPrice),
+                    };
+                } catch {
+                    return null;
+                }
+            });
 
-        for (const row of marketRows) {
-            if (!grouped.has(row.period)) {
-                grouped.set(row.period, { date: row.period });
-            }
-            const target = grouped.get(row.period);
-            const avgPrice = Number(row.avg_price);
-            const minPrice = row.min_price === null ? avgPrice : Number(row.min_price);
-            const maxPrice = row.max_price === null ? avgPrice : Number(row.max_price);
-
-            target[row.product_name] = avgPrice;
-            // hidden keys for market min/max used by frontend analytics
-            target[`__min__${row.product_name}`] = minPrice;
-            target[`__max__${row.product_name}`] = maxPrice;
-        }
-
-        const carryForwardEnabled = String(req.query.carry_forward ?? 'true').toLowerCase() !== 'false';
-        if (!carryForwardEnabled) {
-            return res.json(Array.from(grouped.values()));
-        }
-
-        const orderedDates = Array.from(grouped.keys()).sort();
-        const startDate = new Date(`${orderedDates[0]}T00:00:00.000Z`);
-        const endDate = new Date(`${orderedDates[orderedDates.length - 1]}T00:00:00.000Z`);
-
-        const byDate = new Map(Array.from(grouped.entries()));
-        const lastKnown = new Map();
-        const filled = [];
-
-        const formatDateKey = (date) => {
-            const y = date.getUTCFullYear();
-            const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-            const d = String(date.getUTCDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        };
-
-        const cursor = new Date(startDate);
-        while (cursor <= endDate) {
-            const dateKey = formatDateKey(cursor);
-            const source = byDate.get(dateKey) || { date: dateKey };
-
-            for (const key of Object.keys(source)) {
-                if (key === 'date' || key.startsWith('__')) continue;
-                lastKnown.set(key, {
-                    avg: source[key],
-                    min: source[`__min__${key}`],
-                    max: source[`__max__${key}`],
-                });
+            for (const row of dailyRows) {
+                const target = grouped.get(row.date);
+                if (!target || !row.productName) continue;
+                target[row.productName] = row.avgPrice;
+                target[`__min__${row.productName}`] = row.minPrice;
+                target[`__max__${row.productName}`] = row.maxPrice;
             }
 
-            const row = { date: dateKey };
-            for (const [cropName, price] of lastKnown.entries()) {
-                row[cropName] = price.avg;
-                row[`__min__${cropName}`] = price.min;
-                row[`__max__${cropName}`] = price.max;
-            }
+            return null;
+        });
 
-            filled.push(row);
-            cursor.setUTCDate(cursor.getUTCDate() + 1);
-        }
-
-        res.json(filled);
+        const result = Array.from(grouped.values()).filter((row) => Object.keys(row).length > 1);
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1284,72 +1400,47 @@ app.get('/api/market-prices/today', async (req, res) => {
 });
 
 /**
- * Store market price in database
- * POST /api/market-prices/store
- */
-app.post('/api/market-prices/store', async (req, res) => {
-    try {
-        const workspaceId = requireWorkspaceId(req, res);
-        if (!workspaceId) return;
-        const { date, productId, productName, minPrice, maxPrice, avgPrice } = req.body;
-        
-        if (!date || !productId || avgPrice === undefined) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-        
-        const sql = `
-            INSERT INTO market_prices (workspace_id, date, product_id, product_name, min_price, max_price, avg_price)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (workspace_id, date, product_id)
-            DO UPDATE SET product_name = COALESCE(NULLIF(EXCLUDED.product_name, ''), market_prices.product_name),
-                          min_price = EXCLUDED.min_price,
-                          max_price = EXCLUDED.max_price,
-                          avg_price = EXCLUDED.avg_price
-        `;
-        
-        const normalizedName = normalizeMarketProductName(productName || '');
-        await pool.query(sql, [workspaceId, date, productId, normalizedName, minPrice, maxPrice, avgPrice]);
-        
-        res.status(201).json({ 
-            message: 'Market price stored successfully',
-            date, productId, avgPrice 
-        });
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
-});
-
-/**
  * Get market price history for a product
  * GET /api/market-prices/history/:product_id?from_date=2026-02-01&to_date=2026-02-28
  */
 app.get('/api/market-prices/history/:product_id', async (req, res) => {
     try {
-        const workspaceId = requireWorkspaceId(req, res);
-        if (!workspaceId) return;
         const { product_id } = req.params;
         const { from_date, to_date } = req.query;
 
         if (!isAllowedMarketProductId(product_id)) {
             return res.status(400).json({ error: 'Only vegetable product IDs are allowed (P13001-P13092)' });
         }
-        
-        let sql = 'SELECT * FROM market_prices WHERE workspace_id = $1 AND product_id = $2';
-        const params = [workspaceId, product_id];
-        
-        if (from_date && to_date) {
-            sql += ' AND date BETWEEN $3 AND $4';
-            params.push(from_date, to_date);
-        }
-        
-        sql += ' ORDER BY date DESC LIMIT 100';
-        
-        const { rows } = await pool.query(sql, params);
-        
+
+        const end = String(to_date || new Date().toISOString().split('T')[0]);
+        const startObj = new Date(`${end}T00:00:00.000Z`);
+        startObj.setUTCDate(startObj.getUTCDate() - 13);
+        const start = String(from_date || formatDateKey(startObj));
+
+        const dateKeys = listDateRange(start, end, 45);
+        const rows = await runWithConcurrency(dateKeys, 6, async (date) => {
+            try {
+                const price = await getRealtimePrice(product_id, date, date);
+                if (!Number.isFinite(price?.avgPrice)) return null;
+                return {
+                    date,
+                    product_id,
+                    product_name: normalizeMarketProductName(price.productName || product_id),
+                    min_price: Number.isFinite(price.minPrice) ? Number(price.minPrice) : Number(price.avgPrice),
+                    max_price: Number.isFinite(price.maxPrice) ? Number(price.maxPrice) : Number(price.avgPrice),
+                    avg_price: Number(price.avgPrice),
+                    source: 'moc-realtime',
+                };
+            } catch {
+                return null;
+            }
+        });
+
         if (rows.length === 0) {
             return res.status(404).json({ message: 'No price history found' });
         }
-        
+
+        rows.sort((a, b) => String(b.date).localeCompare(String(a.date)));
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1362,52 +1453,32 @@ app.get('/api/market-prices/history/:product_id', async (req, res) => {
  */
 app.get('/api/market-prices/latest', async (req, res) => {
     try {
-        const workspaceId = requireWorkspaceId(req, res);
-        if (!workspaceId) return;
-
         const limit = Number(req.query.limit || 200);
-        const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 1000) : 200;
+        const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 92) : 40;
+        const today = new Date().toISOString().split('T')[0];
+        const products = await getTrackedMarketProducts(safeLimit);
 
-        const sql = `
-            SELECT
-                MAX(id) AS id,
-                workspace_id,
-                MAX(date) AS date,
-                MAX(product_id) AS product_id,
-                normalized_name AS product_name,
-                AVG(min_price)::float8 AS min_price,
-                AVG(max_price)::float8 AS max_price,
-                AVG(avg_price)::float8 AS avg_price,
-                MAX(created_at) AS created_at
-            FROM (
-                SELECT
-                    id,
-                    workspace_id,
-                    date,
-                    product_id,
-                    regexp_replace(btrim(product_name), '\\s+(คละ|คัด)(?=\\s*\\(|$)', '', 'g') AS normalized_name,
-                    min_price,
-                    max_price,
-                    avg_price,
-                    created_at
-                FROM market_prices
-                WHERE workspace_id = $1
-                  AND product_id ~ '^P13(00[1-9]|0[1-8][0-9]|09[0-2])$'
-                  AND product_name IS NOT NULL
-                  AND btrim(product_name) <> ''
-            ) latest
-            WHERE normalized_name <> ''
-            GROUP BY workspace_id, normalized_name
-            ORDER BY date DESC, product_id ASC
-            LIMIT $2
-        `;
-
-        let { rows } = await pool.query(sql, [workspaceId, safeLimit]);
-
-        if (rows.length === 0 && workspaceId !== 'default') {
-            const fallback = await pool.query(sql, ['default', safeLimit]);
-            rows = fallback.rows;
-        }
+        const rows = await runWithConcurrency(products, 6, async (product, index) => {
+            try {
+                const price = await getRealtimePrice(product.id, today, today);
+                if (!Number.isFinite(price?.avgPrice)) return null;
+                const productName = normalizeMarketProductName(price.productName || product.name || product.id);
+                if (!productName) return null;
+                return {
+                    id: `${today}-${product.id}-${index}`,
+                    date: today,
+                    product_id: product.id,
+                    product_name: productName,
+                    min_price: Number.isFinite(price.minPrice) ? Number(price.minPrice) : Number(price.avgPrice),
+                    max_price: Number.isFinite(price.maxPrice) ? Number(price.maxPrice) : Number(price.avgPrice),
+                    avg_price: Number(price.avgPrice),
+                    created_at: price.fetchedAt || new Date().toISOString(),
+                    source: 'moc-realtime',
+                };
+            } catch {
+                return null;
+            }
+        });
 
         res.json(rows);
     } catch (err) {
@@ -1422,8 +1493,6 @@ app.get('/api/market-prices/latest', async (req, res) => {
  */
 app.post('/api/market-prices/compare', async (req, res) => {
     try {
-        const workspaceId = requireWorkspaceId(req, res);
-        if (!workspaceId) return;
         const { date, product_ids } = req.body;
         
         if (!date || !product_ids || product_ids.length === 0) {
@@ -1435,12 +1504,25 @@ app.post('/api/market-prices/compare', async (req, res) => {
                 error: `Unsupported product_id: ${invalidId}. Only P13001-P13092 are allowed`
             });
         }
-        
-        // build numbered placeholders starting at $3 ($1 workspace, $2 date)
-        const placeholders = product_ids.map((_, i) => `$${i + 3}`).join(',');
-        const sql = `SELECT * FROM market_prices WHERE workspace_id = $1 AND date = $2 AND product_id IN (${placeholders})`;
-        
-        const { rows } = await pool.query(sql, [workspaceId, date, ...product_ids]);
+
+        const rows = await runWithConcurrency(product_ids, 6, async (productId, index) => {
+            try {
+                const price = await getRealtimePrice(productId, date, date);
+                if (!Number.isFinite(price?.avgPrice)) return null;
+                return {
+                    id: `${date}-${productId}-${index}`,
+                    date,
+                    product_id: productId,
+                    product_name: normalizeMarketProductName(price.productName || productId),
+                    min_price: Number.isFinite(price.minPrice) ? Number(price.minPrice) : Number(price.avgPrice),
+                    max_price: Number.isFinite(price.maxPrice) ? Number(price.maxPrice) : Number(price.avgPrice),
+                    avg_price: Number(price.avgPrice),
+                    source: 'moc-realtime',
+                };
+            } catch {
+                return null;
+            }
+        });
         
         res.json({
             date,
@@ -1452,94 +1534,16 @@ app.post('/api/market-prices/compare', async (req, res) => {
     }
 });
 
-/**
- * Repair placeholder market prices and backfill from MOC for a date range.
- * POST /api/market-prices/maintenance/repair
- * Body: {
- *   fromDate: "2026-03-01",
- *   toDate: "2026-03-09",
- *   cleanupPlaceholder: true,
- *   cleanupNonVegetable: true,
- *   repairMissingNames: true,
- *   workspaceId: "default"
- * }
- */
+app.post('/api/market-prices/store', async (req, res) => {
+    res.status(410).json({
+        error: 'Market price storage endpoint has been removed. Use real-time market APIs instead.',
+    });
+});
+
 app.post('/api/market-prices/maintenance/repair', async (req, res) => {
-    try {
-        const {
-            fromDate,
-            toDate,
-            cleanupPlaceholder = true,
-            cleanupNonVegetable = false,
-            repairMissingNames = true,
-            workspaceId = 'default'
-        } = req.body || {};
-
-        if (!fromDate || !toDate) {
-            return res.status(400).json({ error: 'fromDate and toDate are required (YYYY-MM-DD)' });
-        }
-
-        let deletedRows = 0;
-        if (cleanupPlaceholder) {
-            const deleteSql = `
-                DELETE FROM market_prices
-                WHERE workspace_id = $1
-                  AND min_price = 5
-                  AND max_price = 5
-                  AND avg_price = 5
-                  AND (product_name IS NULL OR btrim(product_name) = '')
-                  AND date BETWEEN $2 AND $3
-            `;
-            const deleted = await pool.query(deleteSql, [workspaceId, fromDate, toDate]);
-            deletedRows = deleted.rowCount || 0;
-        }
-
-        let deletedNonVegetableRows = 0;
-        if (cleanupNonVegetable) {
-            const deleteNonVegetableSql = `
-                DELETE FROM market_prices
-                WHERE workspace_id = $1
-                  AND date BETWEEN $2 AND $3
-                AND product_id !~ '^P13(00[1-9]|0[1-8][0-9]|09[0-2])$'
-            `;
-            const deletedNonVegetable = await pool.query(deleteNonVegetableSql, [workspaceId, fromDate, toDate]);
-            deletedNonVegetableRows = deletedNonVegetable.rowCount || 0;
-        }
-
-        let repairedNameRows = 0;
-        if (repairMissingNames) {
-            for (const [productId, mapping] of Object.entries(PRODUCT_MAP)) {
-                const displayName = mapping?.name || '';
-                if (!displayName) continue;
-
-                const updateSql = `
-                    UPDATE market_prices
-                    SET product_name = $1
-                    WHERE workspace_id = $2
-                      AND product_id = $3
-                      AND (product_name IS NULL OR btrim(product_name) = '')
-                      AND date BETWEEN $4 AND $5
-                `;
-                const updated = await pool.query(updateSql, [displayName, workspaceId, productId, fromDate, toDate]);
-                repairedNameRows += updated.rowCount || 0;
-            }
-        }
-
-        await priceScheduler.backfillPricesInRange(fromDate, toDate);
-
-        res.json({
-            success: true,
-            fromDate,
-            toDate,
-            workspaceId,
-            deletedRows,
-            deletedNonVegetableRows,
-            repairedNameRows,
-            message: 'Market price repair completed',
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    res.status(410).json({
+        error: 'Market price maintenance endpoint has been removed. Data is now fetched in real-time.',
+    });
 });
 
 // --- Start Server ---
@@ -1554,7 +1558,4 @@ app.listen(port, () => {
     console.log('  POST /api/auth/register');
     console.log('  POST /api/register  (alias)');
     console.log('\n========================================\n');
-    
-    // Start automatic market price scheduler (runs daily at 6 AM)
-    priceScheduler.startScheduler(6, 0);
 });

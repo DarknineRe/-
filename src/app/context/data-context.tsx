@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { toast } from "sonner";
 import { API_BASE } from "../../api";
 import { useWorkspace } from "./workspace-context";
+import { useAuth } from "./auth-context";
 
 export interface Product {
   id: string;
@@ -9,6 +10,9 @@ export interface Product {
   category: string;
   quantity: number;
   unit: string;
+  price: number;
+  sellerId: string;
+  sellerName: string;
   minStock: number;
   harvestDate?: Date; // วันที่เก็บเกี่ยว
   lastUpdated: Date;
@@ -73,6 +77,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const { currentWorkspace, getUserRole, getUserPermissions } = useWorkspace();
   const [products, setProducts] = useState<Product[]>([]);
   const [schedules, setSchedules] = useState<PlantingSchedule[]>([]);
@@ -123,10 +128,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     category: row.category,
     quantity: row.quantity,
     unit: row.unit,
+    price: Number(row.price ?? 0),
+    sellerId: row.seller_id ?? row.sellerId ?? row.sellerid ?? "legacy",
+    sellerName: row.seller_name ?? row.sellerName ?? row.sellername ?? "ไม่ระบุผู้ขาย",
     minStock: row.minstock ?? row.minStock ?? 0,
     harvestDate: row.harvestdate ? new Date(row.harvestdate) : row.harvestDate ? new Date(row.harvestDate) : undefined,
     lastUpdated: row.lastupdated ? new Date(row.lastupdated) : row.lastUpdated ? new Date(row.lastUpdated) : new Date()
   });
+
+  const canModifyProduct = (product: Product) => {
+    if (getUserRole() === "owner") {
+      return true;
+    }
+
+    return Boolean(user?.id) && product.sellerId === user.id;
+  };
 
   const normalizeSchedule = (row: any) => ({
     id: row.id,
@@ -253,10 +269,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (!currentWorkspace?.id) {
         throw new Error("กรุณาเลือกพื้นที่ทำงานก่อน");
       }
+      if (!user?.id || !user.name) {
+        throw new Error("ไม่พบข้อมูลผู้ใช้งาน");
+      }
       ensureCanAdd();
 
       const existingProduct = products.find(
         (p) =>
+          p.sellerId === user.id &&
           p.name.trim().toLowerCase() === product.name.trim().toLowerCase() &&
           p.category.trim().toLowerCase() === product.category.trim().toLowerCase() &&
           p.unit.trim().toLowerCase() === product.unit.trim().toLowerCase()
@@ -266,7 +286,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const mergedProduct: Product = {
           ...existingProduct,
           quantity: existingProduct.quantity + product.quantity,
-          minStock: Math.min(existingProduct.minStock, product.minStock),
+          price: product.price,
+          sellerId: user.id,
+          sellerName: user.name,
+          minStock: product.minStock,
           harvestDate: product.harvestDate || existingProduct.harvestDate,
           lastUpdated: new Date(),
         };
@@ -299,7 +322,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           action: "update",
           type: "product",
           itemName: existingProduct.name,
-          user: "admin",
+          user: user.name,
           timestamp: new Date(),
           details: JSON.stringify({
             itemId: existingProduct.id,
@@ -318,6 +341,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         category: product.category,
         quantity: product.quantity,
         unit: product.unit,
+        price: product.price,
+        sellerId: user.id,
+        sellerName: user.name,
         minStock: product.minStock,
         harvestDate: product.harvestDate || '',
         lastUpdated: new Date().toISOString()
@@ -347,7 +373,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: "add",
         type: "product",
         itemName: productName,
-        user: "admin",
+        user: user.name,
         timestamp: new Date(),
         details: JSON.stringify({
           itemId: normalized.id,
@@ -369,6 +395,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       ensureCanEdit();
       const oldProduct = products.find(p => p.id === updatedProduct.id);
+      if (!oldProduct) {
+        throw new Error("ไม่พบสินค้า");
+      }
+      if (!canModifyProduct(oldProduct)) {
+        throw new Error("คุณแก้ไขได้เฉพาะสินค้าของตัวเอง");
+      }
       const payload = { ...updatedProduct, workspaceId: currentWorkspace.id, lastUpdated: new Date().toISOString() };
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/products/${updatedProduct.id}?${workspaceQuery}`, {
@@ -389,7 +421,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: "update",
         type: "product",
         itemName: updatedProduct.name,
-        user: "admin",
+        user: user?.name || "system",
         timestamp: new Date(),
         details: JSON.stringify({
           itemId: updatedProduct.id,
@@ -398,7 +430,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }),
       });
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาดในการอัพเดทสินค้า");
+      toast.error(error instanceof Error ? error.message : "เกิดข้อผิดพลาดในการอัพเดทสินค้า");
       console.error(error);
     }
   };
@@ -410,6 +442,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       ensureCanEdit();
       const product = products.find(p => p.id === id);
+      if (!product) {
+        throw new Error("ไม่พบสินค้า");
+      }
+      if (!canModifyProduct(product)) {
+        throw new Error("คุณลบได้เฉพาะสินค้าของตัวเอง");
+      }
       const workspaceQuery = `workspace_id=${encodeURIComponent(currentWorkspace.id)}`;
       const res = await fetch(`${API_BASE}/api/products/${id}?${workspaceQuery}`, { method: 'DELETE' });
 
@@ -424,7 +462,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           action: "delete",
           type: "product",
           itemName: product.name,
-          user: "admin",
+          user: user?.name || "system",
           timestamp: new Date(),
           details: JSON.stringify({
             itemId: product.id,
@@ -433,7 +471,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาดในการลบสินค้า");
+      toast.error(error instanceof Error ? error.message : "เกิดข้อผิดพลาดในการลบสินค้า");
       console.error(error);
     }
   };
@@ -462,7 +500,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: "add",
         type: "schedule",
         itemName: schedule.cropName,
-        user: "admin",
+        user: user?.name || "system",
         timestamp: new Date(),
         details: JSON.stringify({
           itemId: normalized.id,
@@ -501,7 +539,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         action: "update",
         type: "schedule",
         itemName: updatedSchedule.cropName,
-        user: "admin",
+        user: user?.name || "system",
         timestamp: new Date(),
         details: JSON.stringify({
           itemId: updatedSchedule.id,
@@ -536,7 +574,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           action: "delete",
           type: "schedule",
           itemName: schedule.cropName,
-          user: "admin",
+          user: user?.name || "system",
           timestamp: new Date(),
           details: JSON.stringify({
             itemId: schedule.id,

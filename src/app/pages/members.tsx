@@ -63,6 +63,15 @@ export function Members() {
   const userPermissions = getUserPermissions();
   const isOwner = userRole === "owner";
   const canManagePermissions = isOwner || userPermissions.canManagePermissions;
+  const merchants = employees.filter((member) => member.canAdd);
+  const buyers = employees.filter((member) => !member.canAdd);
+
+  const getMemberLabel = (member: WorkspaceMember) => {
+    if (member.role === "owner") {
+      return "Admin";
+    }
+    return member.canAdd ? "ผู้ค้า" : "ผู้ซื้อ";
+  };
 
   const handleCopyCode = () => {
     if (currentWorkspace) {
@@ -293,7 +302,7 @@ export function Members() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-100 rounded-full">
@@ -314,7 +323,7 @@ export function Members() {
               <Crown className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Owner</p>
+              <p className="text-sm text-gray-600">Admin</p>
               <p className="text-2xl font-bold text-gray-900">1</p>
             </div>
           </div>
@@ -326,9 +335,23 @@ export function Members() {
               <User className="h-6 w-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-600">Employee</p>
+              <p className="text-sm text-gray-600">ผู้ค้า</p>
               <p className="text-2xl font-bold text-gray-900">
-                {employees.length}
+                {merchants.length}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-amber-100 rounded-full">
+              <User className="h-6 w-6 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">ผู้ซื้อ</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {buyers.length}
               </p>
             </div>
           </div>
@@ -367,7 +390,7 @@ export function Members() {
                   <TableCell>{owner.email}</TableCell>
                   <TableCell>
                     <Badge className="bg-green-600 hover:bg-green-700">
-                      Owner
+                      Admin
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
@@ -402,7 +425,7 @@ export function Members() {
                   </TableCell>
                   <TableCell>{member.email}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">Employee</Badge>
+                    <Badge variant="secondary">{getMemberLabel(member)}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Switch
@@ -552,7 +575,7 @@ export function Members() {
           <DialogHeader>
             <DialogTitle>กำหนดสิทธิ์การดูหน้า</DialogTitle>
             <DialogDescription>
-              เลือกหน้าที่พนักงานคนนี้สามารถเข้าดูได้ เช่น ดูเฉพาะหน้า Inventory
+              เลือกหน้าที่สมาชิกคนนี้สามารถเข้าดูได้ เช่น ให้ผู้ซื้อดูเฉพาะตลาดกลางและหน้าสรุป
             </DialogDescription>
           </DialogHeader>
 
@@ -588,7 +611,7 @@ export function Members() {
                   disabled={updatingMemberId === selectedMemberForViews.id}
                   onClick={applyViewPermissionDraft}
                 >
-                  Apply
+                  บันทึกสิทธิ์
                 </Button>
               </DialogFooter>
             </div>

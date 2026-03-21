@@ -2,7 +2,8 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { Layout } from "./components/layout";
 import { ProtectedLayout } from "./components/protected-layout";
 import { HubProtectedLayout } from "./components/hub-protected-layout";
-import { Dashboard } from "./pages/dashboard";
+import { Marketplace } from "./pages/marketplace";
+import { RoleHome } from "./pages/role-home";
 import { Inventory } from "./pages/inventory";
 import { InventorySummary } from "./pages/inventory-summary";
 import { PlantingCalendar } from "./pages/planting-calendar";
@@ -37,7 +38,8 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: Dashboard },
+      { index: true, Component: RoleHome },
+      { path: "marketplace", Component: Marketplace },
       { path: "inventory", Component: Inventory },
       { path: "summary", Component: InventorySummary },
       { path: "calendar", Component: PlantingCalendar },

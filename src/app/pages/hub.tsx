@@ -128,6 +128,13 @@ export function Hub() {
       .slice(0, 2);
   };
 
+  const getWorkspaceRoleLabel = (isOwner: boolean, memberCount: number) => {
+    if (isOwner) {
+      return "Admin";
+    }
+    return memberCount > 1 ? "สมาชิกตลาดกลาง" : "ผู้ใช้งาน";
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
       {/* Header */}
@@ -258,7 +265,7 @@ export function Hub() {
                                 variant={isOwner ? "default" : "secondary"}
                                 className={isOwner ? "bg-green-600" : ""}
                               >
-                                {isOwner ? "Owner" : "Employee"}
+                                {getWorkspaceRoleLabel(isOwner, workspace.members.length)}
                               </Badge>
                             </div>
                             <div className="flex items-center gap-4 text-sm text-gray-600">

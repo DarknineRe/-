@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useData } from "../context/data-context";
 import { useWorkspace } from "../context/workspace-context";
+import { useAuth } from "../context/auth-context";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -45,8 +46,10 @@ import {
 
 export function Inventory() {
   const { products, updateProduct, deleteProduct, activityLogs, rollbackActivity } = useData();
-  const { getUserPermissions } = useWorkspace();
+  const { getUserPermissions, getUserRole } = useWorkspace();
+  const { user } = useAuth();
   const permissions = getUserPermissions();
+  const isAdmin = getUserRole() === "owner";
   const [searchTerm, setSearchTerm] = useState("");
   const [workspaceMode, setWorkspaceMode] = useState<"category" | "product">("category");
   const [workspaceFilter, setWorkspaceFilter] = useState<string>("ทั้งหมด");
@@ -112,6 +115,19 @@ export function Inventory() {
         : product.name === workspaceFilter;
     return matchesSearch && matchesWorkspace;
   });
+
+  const sortedProducts = [...filteredProducts].sort((left, right) => {
+    if (left.category !== right.category) {
+      return left.category.localeCompare(right.category, "th");
+    }
+    if (left.name !== right.name) {
+      return left.name.localeCompare(right.name, "th");
+    }
+    return left.price - right.price;
+  });
+
+  const canManageProduct = (product: Product) =>
+    permissions.canEdit && (isAdmin || product.sellerId === user?.id);
 
   const getStockStatus = (product: Product) => {
     if (product.quantity === 0) {
@@ -220,8 +236,8 @@ export function Inventory() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">จัดการสต็อกผลผลิต</h2>
-          <p className="text-gray-600 mt-1">ตรวจสอบและจัดการข้อมูลผลผลิตทางการเกษตร</p>
+          <h2 className="text-2xl font-bold text-gray-900">คลังสินค้าของผู้ค้า</h2>
+          <p className="text-gray-600 mt-1">ผู้ค้าสามารถเพิ่มสินค้าและตั้งราคาได้ ส่วนผู้ซื้อใช้หน้านี้ดูรายการเชิงรายละเอียด</p>
         </div>
         <Button
           onClick={() => setIsAddDialogOpen(true)}
@@ -366,7 +382,7 @@ export function Inventory() {
                           ปริมาณรวม {workspace.totalQuantity.toLocaleString()} {unitLabel}
                         </p>
                       </div>
-                      {!isAll && permissions.canEdit && product && (
+                      {!isAll && product && canManageProduct(product) && (
                         <div className="relative z-10 mt-2 flex items-center gap-2">
                           <Button
                             type="button"
@@ -479,6 +495,8 @@ export function Inventory() {
               <TableRow>
                 <TableHead>ชื่อสินค้า</TableHead>
                 <TableHead>หมวดหมู่</TableHead>
+                <TableHead>ผู้ขาย</TableHead>
+                <TableHead className="text-right">ราคา</TableHead>
                 <TableHead className="text-right">จำนวน</TableHead>
                 <TableHead>สถานะ</TableHead>
                 <TableHead>วันที่เก็บเกี่ยว</TableHead>
@@ -488,7 +506,7 @@ export function Inventory() {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
                       <AlertCircle className="h-8 w-8 text-gray-400" />
                       <p className="text-gray-500">ไม่พบสินค้า</p>
@@ -496,8 +514,9 @@ export function Inventory() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => {
+                sortedProducts.map((product) => {
                   const status = getStockStatus(product);
+                  const canManage = canManageProduct(product);
 
                   return (
                     <TableRow key={product.id}>
@@ -505,6 +524,19 @@ export function Inventory() {
                         {product.name}
                       </TableCell>
                       <TableCell>{product.category}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{product.sellerName}</span>
+                          {product.sellerId === user?.id && (
+                            <Badge variant="secondary" className="text-[11px]">
+                              ของฉัน
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-emerald-700">
+                        ฿{product.price.toFixed(2)}
+                      </TableCell>
                       <TableCell className="text-right">
                         {product.quantity.toLocaleString()} {product.unit}
                       </TableCell>
@@ -522,7 +554,7 @@ export function Inventory() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-2">
-                          {permissions.canEdit && (
+                          {canManage && (
                             <>
                               <Button
                                 variant="ghost"
@@ -539,6 +571,11 @@ export function Inventory() {
                                 <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>
                             </>
+                          )}
+                          {!canManage && permissions.canEdit && (
+                            <Badge variant="outline" className="text-xs">
+                              ของผู้ค้าอื่น
+                            </Badge>
                           )}
                           {!permissions.canEdit && (
                             <Badge variant="secondary" className="text-xs">

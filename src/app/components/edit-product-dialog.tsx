@@ -48,6 +48,7 @@ export function EditProductDialog({
     name: product.name,
     category: product.category,
     quantity: product.quantity.toString(),
+    price: product.price.toString(),
     minStock: (product.minStock ?? 0).toString(),
     unit: product.unit,
     harvestDate: product.harvestDate
@@ -60,6 +61,7 @@ export function EditProductDialog({
       name: product.name,
       category: product.category,
       quantity: product.quantity.toString(),
+      price: product.price.toString(),
       minStock: (product.minStock ?? 0).toString(),
       unit: product.unit,
       harvestDate: product.harvestDate
@@ -77,6 +79,7 @@ export function EditProductDialog({
       category: formData.category,
       quantity: Number(formData.quantity),
       unit: formData.unit,
+      price: Number(formData.price),
       minStock: Number(formData.minStock || 0),
       harvestDate: formData.harvestDate ? new Date(formData.harvestDate) : undefined,
     });
@@ -144,6 +147,22 @@ export function EditProductDialog({
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="edit-price">ราคาขายต่อหน่วย (บาท) *</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) =>
+                  setFormData({ ...formData, price: e.target.value })
+                }
+                placeholder="เช่น 45.00"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="edit-minStock">แจ้งเตือนเมื่อเหลือต่ำกว่า/เท่ากับ</Label>
               <Input
                 id="edit-minStock"
@@ -189,6 +208,11 @@ export function EditProductDialog({
                   setFormData({ ...formData, harvestDate: e.target.value })
                 }
               />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>เจ้าของสินค้า</Label>
+              <Input value={product.sellerName} disabled />
             </div>
           </div>
 

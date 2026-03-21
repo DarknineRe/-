@@ -243,6 +243,9 @@ async function initializeDatabase() {
                 category VARCHAR(100) NOT NULL,
                 quantity INT NOT NULL,
                 unit VARCHAR(50) NOT NULL,
+                price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+                seller_id VARCHAR(255) NOT NULL DEFAULT 'legacy',
+                seller_name VARCHAR(255) NOT NULL DEFAULT 'ไม่ระบุผู้ขาย',
                 minStock INT NOT NULL DEFAULT 0,
                 harvestDate VARCHAR(255),
                 lastUpdated VARCHAR(255) NOT NULL
@@ -256,10 +259,41 @@ async function initializeDatabase() {
             ALTER TABLE products ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(255);
         `);
         await client.query(`
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS price NUMERIC(10, 2);
+        `);
+        await client.query(`
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS seller_id VARCHAR(255);
+        `);
+        await client.query(`
+            ALTER TABLE products ADD COLUMN IF NOT EXISTS seller_name VARCHAR(255);
+        `);
+        await client.query(`
             UPDATE products SET workspace_id = 'default' WHERE workspace_id IS NULL;
         `);
         await client.query(`
+            UPDATE products
+            SET price = COALESCE(price, 0),
+                seller_id = COALESCE(seller_id, 'legacy'),
+                seller_name = COALESCE(NULLIF(seller_name, ''), 'ไม่ระบุผู้ขาย')
+            WHERE price IS NULL
+               OR seller_id IS NULL
+               OR seller_name IS NULL
+               OR seller_name = '';
+        `);
+        await client.query(`
             ALTER TABLE products ALTER COLUMN workspace_id SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE products ALTER COLUMN price SET DEFAULT 0;
+        `);
+        await client.query(`
+            ALTER TABLE products ALTER COLUMN price SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE products ALTER COLUMN seller_id SET NOT NULL;
+        `);
+        await client.query(`
+            ALTER TABLE products ALTER COLUMN seller_name SET NOT NULL;
         `);
 
         await client.query(`
@@ -286,56 +320,9 @@ async function initializeDatabase() {
             ALTER TABLE schedules ALTER COLUMN workspace_id SET NOT NULL;
         `);
 
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS price_history (
-                id SERIAL PRIMARY KEY,
-                workspace_id VARCHAR(255) NOT NULL DEFAULT 'default',
-                date VARCHAR(50) NOT NULL,
-                cropData JSON NOT NULL
-            );
-        `);
-        await client.query(`
-            ALTER TABLE price_history ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(255);
-        `);
-        await client.query(`
-            UPDATE price_history SET workspace_id = 'default' WHERE workspace_id IS NULL;
-        `);
-        await client.query(`
-            ALTER TABLE price_history ALTER COLUMN workspace_id SET NOT NULL;
-        `);
-
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS market_prices (
-                id SERIAL PRIMARY KEY,
-                workspace_id VARCHAR(255) NOT NULL DEFAULT 'default',
-                date DATE NOT NULL,
-                product_id VARCHAR(50) NOT NULL,
-                product_name VARCHAR(255),
-                min_price DECIMAL(10, 2),
-                max_price DECIMAL(10, 2),
-                avg_price DECIMAL(10, 2) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (workspace_id, date, product_id)
-            );
-        `);
-        await client.query(`
-            ALTER TABLE market_prices ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(255);
-        `);
-        await client.query(`
-            UPDATE market_prices SET workspace_id = 'default' WHERE workspace_id IS NULL;
-        `);
-        await client.query(`
-            ALTER TABLE market_prices ALTER COLUMN workspace_id SET NOT NULL;
-        `);
-        await client.query(`
-            ALTER TABLE market_prices DROP CONSTRAINT IF EXISTS market_prices_date_product_id_key;
-        `);
-        await client.query(`
-            ALTER TABLE market_prices DROP CONSTRAINT IF EXISTS market_prices_workspace_date_product_key;
-        `);
-        await client.query(`
-            ALTER TABLE market_prices ADD CONSTRAINT market_prices_workspace_date_product_key UNIQUE (workspace_id, date, product_id);
-        `);
+        // Market price data is now fetched in real time from MOC API, not persisted locally.
+        await client.query('DROP TABLE IF EXISTS price_history;');
+        await client.query('DROP TABLE IF EXISTS market_prices;');
 
         await client.query(`
             CREATE TABLE IF NOT EXISTS activity_logs (

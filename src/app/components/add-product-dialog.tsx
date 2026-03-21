@@ -52,6 +52,7 @@ export function AddProductDialog({
     name: "",
     category: "",
     quantity: "",
+    price: "",
     minStock: "",
     unit: "",
     harvestDate: "",
@@ -172,6 +173,11 @@ export function AddProductDialog({
       return;
     }
 
+    if (!formData.price || Number(formData.price) < 0) {
+      toast.error("กรุณากรอกราคาที่ถูกต้อง");
+      return;
+    }
+
     if (Number(formData.minStock || 0) < 0) {
       toast.error("จำนวนขั้นต่ำต้องไม่ติดลบ");
       return;
@@ -188,6 +194,7 @@ export function AddProductDialog({
         category: formData.category,
         quantity: Number(formData.quantity),
         unit: formData.unit,
+        price: Number(formData.price),
         minStock: Number(formData.minStock || 0),
         harvestDate: formData.harvestDate || undefined,
       });
@@ -197,6 +204,7 @@ export function AddProductDialog({
         name: "",
         category: "",
         quantity: "",
+        price: "",
         minStock: "",
         unit: "",
         harvestDate: "",
@@ -280,6 +288,22 @@ export function AddProductDialog({
                   setFormData({ ...formData, quantity: e.target.value })
                 }
                 placeholder="0"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">ราคาขายต่อหน่วย (บาท) *</Label>
+              <Input
+                id="price"
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={(e) =>
+                  setFormData({ ...formData, price: e.target.value })
+                }
+                placeholder="เช่น 45.00"
               />
             </div>
 
